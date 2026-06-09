@@ -346,11 +346,22 @@ function normalizeGoals(goals = {}) {
   };
 }
 
+function getDefaultApiBaseUrl() {
+  const origin = window.location?.origin || "";
+  if (origin.includes("workers.dev") || origin.includes("pages.dev")) return origin;
+  return "http://127.0.0.1:8787";
+}
+
+function getDefaultCloudProvider() {
+  const origin = window.location?.origin || "";
+  return origin.includes("workers.dev") || origin.includes("pages.dev") ? "cloudflare" : "api-propia";
+}
+
 function normalizeCloudAccount(account = {}) {
   return {
     email: account.email || "",
-    provider: account.provider || "api-propia",
-    apiBaseUrl: account.apiBaseUrl || "http://127.0.0.1:8787",
+    provider: account.provider || getDefaultCloudProvider(),
+    apiBaseUrl: account.apiBaseUrl || getDefaultApiBaseUrl(),
     token: account.token || "",
     userId: account.userId || "",
     userName: account.userName || "",
