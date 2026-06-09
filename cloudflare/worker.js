@@ -234,7 +234,11 @@ async function handleRequest(request, env) {
     if (error.message === "BODY_TOO_LARGE") {
       return send({ error: "BODY_TOO_LARGE", message: "Payload demasiado grande." }, 413, origin);
     }
-    return send({ error: "SERVER_ERROR", message: "Error interno de la API." }, 500, origin);
+    return send({
+      error: "SERVER_ERROR",
+      message: "Error interno de la API.",
+      ...(env.DEBUG_ERRORS === "1" ? { detail: error.message } : {})
+    }, 500, origin);
   }
 }
 
