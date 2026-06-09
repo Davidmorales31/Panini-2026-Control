@@ -359,6 +359,21 @@ function getDefaultApiBaseUrl() {
   return "http://127.0.0.1:8787";
 }
 
+function isHostedApp() {
+  const origin = window.location?.origin || "";
+  return origin.includes("workers.dev") || origin.includes("pages.dev");
+}
+
+function isLocalApiBaseUrl(value) {
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/i.test(String(value || ""));
+}
+
+function normalizeApiBaseUrl(value) {
+  const current = String(value || "").trim();
+  if (isHostedApp() && (!current || isLocalApiBaseUrl(current))) return getDefaultApiBaseUrl();
+  return current || getDefaultApiBaseUrl();
+}
+
 function getDefaultCloudProvider() {
   const origin = window.location?.origin || "";
   return origin.includes("workers.dev") || origin.includes("pages.dev") ? "cloudflare" : "api-propia";
@@ -368,7 +383,7 @@ function normalizeCloudAccount(account = {}) {
   return {
     email: account.email || "",
     provider: account.provider || getDefaultCloudProvider(),
-    apiBaseUrl: account.apiBaseUrl || getDefaultApiBaseUrl(),
+    apiBaseUrl: normalizeApiBaseUrl(account.apiBaseUrl),
     token: account.token || "",
     userId: account.userId || "",
     userName: account.userName || "",
@@ -1489,14 +1504,18 @@ function saveGoalsFromForm() {
 
 function persistCloudAccountFromForm() {
   const current = normalizeCloudAccount(state.data.cloudAccount);
+  const emailField = document.getElementById("cloudEmail");
+  const providerField = document.getElementById("cloudProvider");
+  const apiField = document.getElementById("apiBaseUrl");
+  const email = emailField?.value.trim() || current.email;
   state.data.cloudAccount = normalizeCloudAccount({
-    email: document.getElementById("cloudEmail")?.value.trim() || "",
-    provider: document.getElementById("cloudProvider")?.value || "pendiente",
-    apiBaseUrl: document.getElementById("apiBaseUrl")?.value.trim() || current.apiBaseUrl,
+    email,
+    provider: providerField?.value || current.provider || getDefaultCloudProvider(),
+    apiBaseUrl: apiField?.value.trim() || current.apiBaseUrl,
     token: current.token,
     userId: current.userId,
     userName: current.userName,
-    status: document.getElementById("cloudEmail")?.value.trim() ? "preparada" : "local",
+    status: email ? "preparada" : current.status || "local",
     lastSyncAt: current.lastSyncAt
   });
   saveData();
@@ -1520,10 +1539,15 @@ async function apiRequest(path, options = {}) {
     ...(options.headers || {})
   };
   if (account.token) headers.authorization = `Bearer ${account.token}`;
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...options,
-    headers
-  });
+  let response;
+  try {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
+      ...options,
+      headers
+    });
+  } catch (error) {
+    throw new Error("No pude conectar con la API. Revisa internet o la URL de nube.");
+  }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.message || payload.error || "Error API");
   return payload;
