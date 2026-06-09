@@ -7,8 +7,7 @@
     "enabled": true
   },
   "vars": {
-    "ALLOWED_ORIGIN": "https://panini-2026-control.juandavidmoralesparra31.workers.dev",
-    "DEBUG_ERRORS": "1"
+    "ALLOWED_ORIGIN": "https://panini-2026-control.juandavidmoralesparra31.workers.dev"
   },
   "assets": {
     "directory": "dist",

@@ -60,7 +60,7 @@ async function hashPassword(password, salt = randomHex(16)) {
     {
       name: "PBKDF2",
       salt: encoder.encode(salt),
-      iterations: 120000,
+      iterations: 100000,
       hash: "SHA-256"
     },
     keyMaterial,
