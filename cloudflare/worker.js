@@ -121,10 +121,20 @@ async function handleRequest(request, env) {
 
   try {
     if (request.method === "GET" && url.pathname === "/health") {
+      let database = "missing";
+      if (env.DB) {
+        try {
+          await env.DB.prepare("SELECT 1").first();
+          database = "connected";
+        } catch (error) {
+          database = "error";
+        }
+      }
       return send({
         ok: true,
         service: "album-mundialista-api",
         version: "1.0.0-cloudflare",
+        database,
         time: now()
       }, 200, origin);
     }
