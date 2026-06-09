@@ -1,11 +1,30 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "panini-2026-control",
+  "main": "cloudflare/worker.js",
   "compatibility_date": "2026-06-09",
   "observability": {
     "enabled": true
   },
+  "vars": {
+    "ALLOWED_ORIGIN": "https://panini-2026-control.juandavidmoralesparra31.workers.dev"
+  },
   "assets": {
-    "directory": "dist"
-  }
+    "directory": "dist",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/health",
+      "/auth/*",
+      "/me",
+      "/sync/*"
+    ],
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mi-album-mundialista-db",
+      "database_id": "c6b909bb-afc7-42b9-a0b2-0fda15e62983"
+    }
+  ]
 }
