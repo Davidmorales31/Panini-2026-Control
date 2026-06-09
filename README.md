@@ -71,11 +71,11 @@ La app se usa como PWA desde el navegador y puede instalarse en moviles compatib
 
 ## Nota
 
-La app usa `data/catalog-world-cup-2026.json`, generado con 980 fichas. Los datos comerciales generales se validaron contra fuentes oficiales Panini; el listado ficha por ficha fue importado desde Scanini como referencia independiente para coleccionistas.
+La app usa `data/catalog-world-cup-2026.json`, generado con 992 fichas: 980 del checklist base y 12 bonus Coca-Cola (`CC 1` a `CC 12`). Los datos comerciales generales se validaron contra fuentes oficiales Panini/Coca-Cola; el listado ficha por ficha base fue importado desde Scanini como referencia independiente para coleccionistas.
 
 ## Verificacion Actual
 
 - `app.js` pasa revision de sintaxis con Node.
 - `dev-server.mjs` pasa revision de sintaxis con Node.
 - El servidor local entrega `index.html`, `app.js`, `styles.css`, `manifest.json` e `icon.svg` correctamente.
-- El catalogo local contiene 50 secciones, 980 fichas y 68 foil/especiales.
+- El catalogo local contiene 51 secciones, 992 fichas y 68 foil/especiales del checklist base.

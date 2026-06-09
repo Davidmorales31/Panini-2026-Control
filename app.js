@@ -1,5 +1,6 @@
 const STORAGE_KEY = "album-panini-2026-control-v2";
-const CATALOG_URL = "data/catalog-world-cup-2026.json?v=1";
+const INSTALL_NUDGE_KEY = "album-panini-2026-install-nudge-v1";
+const CATALOG_URL = "data/catalog-world-cup-2026.json?v=2";
 const BRAND_LOGO_FULL = "assets/brand-logo-full.png?v=1";
 const BRAND_LOGO_MARK = "assets/brand-logo-mark.png?v=1";
 const LANDING_BG = "assets/landing-bg.png?v=1";
@@ -48,6 +49,7 @@ const lucideIcons = {
   "share-2": '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4"/><path d="m15.4 6.5-6.8 4"/>',
   "bar-chart-3": '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
   wallet: '<path d="M19 7V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2H7a2 2 0 0 1 0-4h10"/><path d="M16 14h.01"/>',
+  smartphone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>',
   camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
   "check-square": '<path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
@@ -154,6 +156,7 @@ const translations = {
 const teamVisuals = {
   PANINI: { flag: "P", colors: ["#FFD800", "#111111", "#FFFFFF"] },
   FWC: { flag: "26", colors: ["#E30613", "#174EA6", "#FFD800"] },
+  CC: { flag: "CC", colors: ["#E41B17", "#FFFFFF", "#111111"] },
   ALG: { flag: "🇩🇿", colors: ["#006233", "#FFFFFF", "#D21034"] },
   ARG: { flag: "🇦🇷", colors: ["#75AADB", "#FFFFFF", "#F6B40E"] },
   AUS: { flag: "🇦🇺", colors: ["#012169", "#FFFFFF", "#E4002B"] },
@@ -641,6 +644,7 @@ function confirmTeamRegister() {
   const section = getSection(state.teamRegisterSectionId);
   registerUniqueStickers(selected, `Registraste seleccion: ${section?.name || "grupo"}`);
   closeModal();
+  trackMobileInstallAction({ important: true });
 }
 
 function closeModal() {
@@ -1140,6 +1144,7 @@ function updateQuantity(stickerId, delta) {
   }
   refreshStickerDom(stickerId);
   scheduleRender(state.view === "album" ? 160 : 40);
+  if (delta > 0) trackMobileInstallAction();
 }
 
 function togglePriority(stickerId) {
@@ -1243,6 +1248,7 @@ function saveRegisterBatch() {
   state.registerText = "";
   state.registerPreview = null;
   render();
+  trackMobileInstallAction({ important: true });
 }
 
 function undoLastBatch() {
@@ -1295,6 +1301,7 @@ function saveExpense() {
   };
   showToast("Gasto guardado.");
   render();
+  trackMobileInstallAction({ important: true });
 }
 
 function deleteExpense(expenseId) {
@@ -1348,6 +1355,7 @@ function saveTrade() {
   };
   showToast("Intercambio guardado.");
   render();
+  trackMobileInstallAction({ important: true });
 }
 
 function updateTradeStatus(tradeId, status) {
@@ -1420,10 +1428,12 @@ async function copyText(text) {
     area.remove();
     showToast("Lista copiada.");
   }
+  trackMobileInstallAction({ important: true });
 }
 
 function openWhatsApp(text) {
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+  trackMobileInstallAction({ important: true });
 }
 
 function downloadText(filename, content, type = "text/plain;charset=utf-8") {
@@ -2011,11 +2021,70 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toast.classList.remove("show"), 2600);
 }
 
+function readInstallNudgeState() {
+  try {
+    return {
+      actions: 0,
+      lastShownAt: 0,
+      dismissedUntil: 0,
+      ...JSON.parse(localStorage.getItem(INSTALL_NUDGE_KEY) || "{}")
+    };
+  } catch (error) {
+    return { actions: 0, lastShownAt: 0, dismissedUntil: 0 };
+  }
+}
+
+function writeInstallNudgeState(nextState) {
+  localStorage.setItem(INSTALL_NUDGE_KEY, JSON.stringify(nextState));
+}
+
+function canShowInstallNudge(important = false) {
+  if (!state.entered || state.activeModal || !isMobileOrTablet() || isStandaloneApp()) return false;
+  const nudge = readInstallNudgeState();
+  const now = Date.now();
+  if (nudge.dismissedUntil && now < nudge.dismissedUntil) return false;
+  const cooldown = important ? 1000 * 60 * 18 : 1000 * 60 * 45;
+  if (nudge.lastShownAt && now - nudge.lastShownAt < cooldown) return false;
+  return important || nudge.actions >= 6;
+}
+
+function showInstallNudge() {
+  const nudge = readInstallNudgeState();
+  writeInstallNudgeState({
+    ...nudge,
+    actions: 0,
+    lastShownAt: Date.now()
+  });
+  state.activeModal = "install-nudge";
+  render();
+}
+
+function postponeInstallNudge(hours = 12) {
+  const nudge = readInstallNudgeState();
+  writeInstallNudgeState({
+    ...nudge,
+    actions: 0,
+    dismissedUntil: Date.now() + hours * 60 * 60 * 1000
+  });
+  closeModal();
+}
+
+function trackMobileInstallAction({ important = false } = {}) {
+  if (!state.entered || isStandaloneApp() || !isMobileOrTablet()) return;
+  const nudge = readInstallNudgeState();
+  writeInstallNudgeState({
+    ...nudge,
+    actions: (nudge.actions || 0) + 1
+  });
+  if (canShowInstallNudge(important)) showInstallNudge();
+}
+
 function navigate(view) {
   state.view = view;
   state.openFilter = null;
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
+  trackMobileInstallAction();
 }
 
 function isMobileOrTablet() {
@@ -2062,7 +2131,7 @@ async function installApp() {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   const register = () => {
-    navigator.serviceWorker.register("sw.js?v=5").catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=6").catch(() => {});
   };
   if (document.readyState === "complete") {
     register();
@@ -2176,9 +2245,32 @@ function pageHeader(title, copy, actions = "") {
 }
 
 function renderActiveModal() {
+  if (state.activeModal === "install-nudge") return renderInstallNudgeModal();
   if (state.activeModal === "team-register") return renderTeamRegisterModal();
   if (state.activeModal === "import-preview") return renderImportModal();
   return "";
+}
+
+function renderInstallNudgeModal() {
+  const iosHelp = isIosDevice() ? "En iPhone/iPad se instala desde Compartir y luego Agregar a pantalla de inicio." : "Se abre como app, carga mas rapido y queda a un toque en tu pantalla.";
+  return `
+    <div class="modal-backdrop install-nudge-backdrop" role="presentation">
+      <section class="modal-panel install-nudge-panel" role="dialog" aria-modal="true" aria-label="Instalar app">
+        <button class="button icon secondary install-nudge-close" data-install-nudge-later type="button">${renderIcon("x")}</button>
+        <div class="install-nudge-icon">${renderIcon("smartphone")}</div>
+        <h3>Usala como app</h3>
+        <p>Para registrar laminas desde el celular es mejor instalarla: queda mas fluida, mas comoda y lista para abrir sin buscar el link.</p>
+        <small>${iosHelp}</small>
+        <div class="install-nudge-actions">
+          <button class="button landing-primary" id="installNudgeInstall" type="button">
+            ${renderIcon("download")}
+            <span>Instalar app</span>
+          </button>
+          <button class="button secondary" data-install-nudge-later type="button">Despues</button>
+        </div>
+      </section>
+    </div>
+  `;
 }
 
 function renderTeamRegisterModal() {
@@ -2709,7 +2801,7 @@ function renderRegister() {
       </button>
     </section>
     <section class="panel">
-      <textarea class="textarea" id="registerText" placeholder="Ejemplo: COL 4, COL 20, FWC 19, 980">${escapeHtml(state.registerText)}</textarea>
+      <textarea class="textarea" id="registerText" placeholder="Ejemplo: COL 4, COL 20, FWC 19, CC 1">${escapeHtml(state.registerText)}</textarea>
       <div class="toolbar" style="margin-top:12px">
         <button class="button" id="analyzeRegister" type="button">${t("reviewBatch")}</button>
         <button class="button secondary" id="undoBatch" type="button">${t("undoLast")}</button>
@@ -3412,7 +3504,7 @@ function renderSettings() {
     </section>
     <section class="panel" style="margin-top:16px">
       <h3 class="panel-title">Siguiente mejora sugerida</h3>
-      <p class="page-copy">Catalogo cargado con 980 cromos. Datos comerciales verificados contra Panini oficial; listado ficha por ficha importado desde Scanini como referencia independiente.</p>
+      <p class="page-copy">Catalogo cargado con ${state.data.stickers.length} cromos, incluyendo la seccion bonus Coca-Cola. Datos comerciales verificados contra Panini/Coca-Cola; listado base importado desde Scanini como referencia independiente.</p>
     </section>
   `;
 }
@@ -3549,6 +3641,18 @@ function bindEvents() {
       closeModal();
     });
   });
+
+  document.querySelectorAll("[data-install-nudge-later]").forEach((button) => {
+    button.addEventListener("click", () => postponeInstallNudge());
+  });
+
+  const installNudgeInstall = document.getElementById("installNudgeInstall");
+  if (installNudgeInstall) {
+    installNudgeInstall.addEventListener("click", async () => {
+      await installApp();
+      postponeInstallNudge(24);
+    });
+  }
 
   const teamRegisterSection = document.getElementById("teamRegisterSection");
   if (teamRegisterSection) {

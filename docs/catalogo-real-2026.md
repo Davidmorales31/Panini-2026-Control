@@ -2,7 +2,7 @@
 
 ## Estado
 
-La app usa un catalogo local de 980 fichas para `FIFA World Cup 2026 Official Sticker Collection`.
+La app usa un catalogo local de 992 fichas para `FIFA World Cup 2026 Official Sticker Collection`: 980 fichas del checklist base y 12 fichas bonus Coca-Cola.
 
 ## Fuentes
 
@@ -20,6 +20,19 @@ Datos validados:
 - 68 cromos especiales en material premium.
 - Sobres de 7 cromos.
 
+### Coca-Cola oficial
+
+Fuente usada para validar la seccion bonus:
+
+- Coca-Cola x Panini FIFA World Cup 26: `https://www.coca-cola.com/us/en/offerings/fifa-world-cup-26/panini`
+- FAQ Coca-Cola x Panini: `https://www.coca-cola.com/us/en/offerings/fifa-world-cup-26/panini/frequently-asked-questions`
+
+Datos validados:
+
+- 12 stickers especiales Coca-Cola.
+- Se coleccionan para una pagina Coca-Cola dentro del album oficial.
+- La app los registra como bonus `CC 1` a `CC 12` hasta tener un checklist publico completo por region.
+
 ### Scanini
 
 Fuente usada para el listado ficha por ficha:
@@ -34,10 +47,10 @@ Nota: Scanini declara ser un proyecto independiente y no afiliado con Panini o F
 
 Contenido:
 
-- 50 secciones.
-- 980 fichas.
-- 68 fichas marcadas como `Foil`.
-- Codigos como `00`, `FWC 19`, `COL 20`, `MEX 1`, etc.
+- 51 secciones.
+- 992 fichas.
+- 68 fichas marcadas como `Foil` en el checklist base.
+- Codigos como `00`, `FWC 19`, `COL 20`, `MEX 1`, `CC 1`, etc.
 - Tipo estimado: `special`, `team-logo`, `team-photo`, `player`.
 - URL de origen por ficha cuando existe.
 
@@ -57,5 +70,5 @@ node -e "const c=require('./data/catalog-world-cup-2026.json'); console.log(c.se
 Resultado esperado:
 
 ```text
-50 980 68
+51 992 68
 ```
