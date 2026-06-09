@@ -1,0 +1,19 @@
+{
+  "name": "Mi Album Mundialista 2026",
+  "short_name": "Album 2026",
+  "id": "/",
+  "description": "Control de laminas, faltantes y repetidas para Mi Album Mundialista 2026.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F4F7FB",
+  "theme_color": "#08204A",
+  "icons": [
+    {
+      "src": "assets/app-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

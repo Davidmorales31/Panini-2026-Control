@@ -1,0 +1,13 @@
+name = "mi-album-mundialista-api"
+main = "cloudflare/worker.js"
+compatibility_date = "2026-06-08"
+
+[vars]
+# Cuando ya tengas la URL final del frontend, cambia "*" por algo como:
+# ALLOWED_ORIGIN = "https://mi-album-mundialista.pages.dev"
+ALLOWED_ORIGIN = "*"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mi-album-mundialista-db"
+database_id = "REEMPLAZA_CON_TU_DATABASE_ID"

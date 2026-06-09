@@ -1,0 +1,11 @@
+.cache/
+server.log
+server.err
+backend/storage/*.json
+backend/storage/*.log
+backend/storage/*.err
+wrangler.toml
+android/app/
+android/.gradle/
+android/build/
+node_modules/
