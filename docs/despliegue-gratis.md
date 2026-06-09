@@ -5,7 +5,7 @@ Ruta recomendada:
 - Frontend/PWA: Cloudflare Pages.
 - API propia: Cloudflare Workers.
 - Base de datos: Cloudflare D1.
-- Android: Capacitor + Android Studio cuando quieras generar APK/AAB.
+- Instalacion movil: PWA desde el navegador.
 
 ## 1. Lo Que Debes Crear
 
@@ -147,15 +147,16 @@ GOOGLE_CLIENT_ID = TU_CLIENT_ID_DE_GOOGLE
 
 Despues de eso, el boton `Google` en Ajustes podra iniciar sesion y guardar el progreso en D1.
 
-## 6. Android
+## 6. Instalacion Movil
 
-Cuando la web y la API ya esten publicadas:
+La app se instala como PWA desde Chrome o navegadores compatibles.
 
-1. Instala Android Studio.
-2. Instala dependencias de Capacitor.
-3. Usa la guia `docs/android-build.md`.
-4. Compila APK para pruebas.
-5. Compila AAB si vas a Play Store.
+En celular:
+
+1. Abre la URL publicada.
+2. Usa `Agregar a pantalla de inicio` o `Instalar app`.
+3. Inicia sesion con Google o cuenta propia.
+4. La sincronizacion queda en Cloudflare D1.
 
 ## Estado De Costos
 

@@ -48,11 +48,9 @@ Ruta recomendada:
 
 Guia: `docs/despliegue-gratis.md`.
 
-## Android
+## Instalacion
 
-La app esta preparada como PWA y tiene configuracion base de Capacitor en `capacitor.config.json`.
-
-Guia: `docs/android-build.md`.
+La app se usa como PWA desde el navegador y puede instalarse en moviles compatibles desde la URL publicada.
 
 ## Funciones Del MVP
 
@@ -69,7 +67,7 @@ Guia: `docs/android-build.md`.
 - Guardado local en el navegador.
 - API propia Node para login y sincronizacion.
 - API productiva compatible para Cloudflare Workers + D1.
-- Base PWA/Android preparada.
+- Base PWA instalable preparada.
 
 ## Nota
 

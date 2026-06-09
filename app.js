@@ -8,6 +8,8 @@ let deferredInstallPrompt = null;
 let saveTimer = null;
 let renderTimer = null;
 let googleIdentityPromise = null;
+let cloudSyncTimer = null;
+let isCloudSyncing = false;
 
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
@@ -482,13 +484,29 @@ function flushSaveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
 }
 
-function saveData({ immediate = false } = {}) {
+function hasCloudSession() {
+  const account = normalizeCloudAccount(state.data?.cloudAccount);
+  return Boolean(account.token && account.apiBaseUrl);
+}
+
+function queueCloudAutosync() {
+  if (!hasCloudSession() || isCloudSyncing) return;
+  if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = setTimeout(() => {
+    cloudSyncTimer = null;
+    uploadCloudData({ silent: true, skipActivity: true });
+  }, 4500);
+}
+
+function saveData({ immediate = false, skipCloudSync = false } = {}) {
   if (immediate) {
     flushSaveData();
+    if (!skipCloudSync) queueCloudAutosync();
     return;
   }
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(flushSaveData, 220);
+  if (!skipCloudSync) queueCloudAutosync();
 }
 
 function scheduleRender(delay = 80) {
@@ -733,17 +751,28 @@ function stickerStatus(sticker) {
   return "owned";
 }
 
-function getStats() {
-  const total = state.data.stickers.length;
-  const owned = state.data.stickers.filter((sticker) => getInventory(sticker.id).quantity > 0).length;
-  const duplicates = state.data.stickers.reduce((sum, sticker) => {
-    const qty = getInventory(sticker.id).quantity;
+function formatProgressPercent(value) {
+  const rounded = Math.round(Number(value || 0) * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function getDataStats(data = state.data) {
+  const inventory = data.inventory || {};
+  const total = data.stickers?.length || 0;
+  const getQty = (stickerId) => Number(inventory[stickerId]?.quantity || 0);
+  const owned = (data.stickers || []).filter((sticker) => getQty(sticker.id) > 0).length;
+  const duplicates = (data.stickers || []).reduce((sum, sticker) => {
+    const qty = getQty(sticker.id);
     return sum + Math.max(0, qty - 1);
   }, 0);
-  const priority = state.data.stickers.filter((sticker) => getInventory(sticker.id).priority).length;
+  const priority = (data.stickers || []).filter((sticker) => inventory[sticker.id]?.priority).length;
   const missing = Math.max(0, total - owned);
-  const progress = total ? Math.round((owned / total) * 100) : 0;
+  const progress = total ? Number(((owned / total) * 100).toFixed(1)) : 0;
   return { total, owned, missing, duplicates, priority, progress };
+}
+
+function getStats() {
+  return getDataStats(state.data);
 }
 
 function getTotalRegisteredStickers() {
@@ -1577,7 +1606,50 @@ function updateCloudAccountFromAuth(payload) {
     provider: payload.provider || normalizeCloudAccount(state.data.cloudAccount).provider || "cloudflare",
     status: "conectada"
   };
-  saveData({ immediate: true });
+  saveData({ immediate: true, skipCloudSync: true });
+}
+
+function restoreCloudAccount(account, payload, status = "sincronizada") {
+  state.data.cloudAccount = {
+    ...normalizeCloudAccount(state.data.cloudAccount),
+    token: account.token,
+    userId: account.userId,
+    userName: account.userName,
+    email: account.email,
+    apiBaseUrl: account.apiBaseUrl,
+    provider: account.provider || payload.provider || "cloudflare",
+    lastSyncAt: payload.updatedAt || new Date().toISOString(),
+    status
+  };
+}
+
+async function syncAfterAuth({ preferUpload = false } = {}) {
+  const account = normalizeCloudAccount(state.data.cloudAccount);
+  if (!account.token) return "local";
+
+  const payload = await apiRequest("/sync/album");
+  if (!payload.data || preferUpload) {
+    await uploadCloudData({ silent: true, skipActivity: true });
+    return "uploaded";
+  }
+
+  const localStats = getDataStats(state.data);
+  const remoteData = normalizeData(payload.data);
+  const remoteStats = getDataStats(remoteData);
+  const localHasMore =
+    localStats.owned > remoteStats.owned ||
+    localStats.duplicates > remoteStats.duplicates ||
+    getTotalRegisteredStickers() > (remoteData.stickers || []).reduce((sum, sticker) => sum + Number(remoteData.inventory?.[sticker.id]?.quantity || 0), 0);
+
+  if (localHasMore) {
+    await uploadCloudData({ silent: true, skipActivity: true });
+    return "uploaded";
+  }
+
+  state.data = remoteData;
+  restoreCloudAccount(account, payload);
+  saveData({ immediate: true, skipCloudSync: true });
+  return "downloaded";
 }
 
 async function registerCloudUser() {
@@ -1595,7 +1667,7 @@ async function registerCloudUser() {
     });
     updateCloudAccountFromAuth(payload);
     addActivity("Creaste cuenta propia");
-    await uploadCloudData({ silent: true });
+    await syncAfterAuth({ preferUpload: true });
     showToast("Cuenta creada, progreso guardado en nube.");
     render();
   } catch (error) {
@@ -1614,15 +1686,17 @@ async function loginCloudUser() {
     });
     updateCloudAccountFromAuth(payload);
     addActivity("Iniciaste sesion con cuenta propia");
-    showToast("Sesion conectada.");
+    const result = await syncAfterAuth();
+    showToast(result === "downloaded" ? "Sesion conectada y progreso descargado." : "Sesion conectada y progreso guardado.");
     render();
   } catch (error) {
     showToast(error.message || "No pude iniciar sesion.");
   }
 }
 
-async function uploadCloudData({ silent = false } = {}) {
+async function uploadCloudData({ silent = false, skipActivity = false } = {}) {
   try {
+    isCloudSyncing = true;
     flushSaveData();
     const account = normalizeCloudAccount(state.data.cloudAccount);
     if (!account.token) {
@@ -1641,12 +1715,14 @@ async function uploadCloudData({ silent = false } = {}) {
       lastSyncAt: payload.updatedAt || new Date().toISOString(),
       status: "sincronizada"
     };
-    saveData({ immediate: true });
-    addActivity("Subiste coleccion a la nube");
+    saveData({ immediate: true, skipCloudSync: true });
+    if (!skipActivity) addActivity("Subiste coleccion a la nube");
     if (!silent) showToast("Coleccion subida a la nube.");
     if (!silent) render();
   } catch (error) {
     if (!silent) showToast(error.message || "No pude subir a la API.");
+  } finally {
+    isCloudSyncing = false;
   }
 }
 
@@ -1672,18 +1748,8 @@ async function downloadCloudData() {
       return;
     }
     state.data = normalizeData(payload.data);
-    state.data.cloudAccount = {
-      ...normalizeCloudAccount(state.data.cloudAccount),
-      token: account.token,
-      userId: account.userId,
-      userName: account.userName,
-      email: account.email,
-      apiBaseUrl: account.apiBaseUrl,
-      provider: account.provider || "cloudflare",
-      lastSyncAt: payload.updatedAt || new Date().toISOString(),
-      status: "sincronizada"
-    };
-    saveData({ immediate: true });
+    restoreCloudAccount(account, payload);
+    saveData({ immediate: true, skipCloudSync: true });
     addActivity("Bajaste coleccion desde la nube");
     showToast("Coleccion descargada desde API.");
     render();
@@ -1730,12 +1796,12 @@ async function loginWithGoogle({ enterAfterAuth = false } = {}) {
           });
           updateCloudAccountFromAuth({ ...payload, provider: "google" });
           addActivity("Iniciaste sesion con Google");
-          await uploadCloudData({ silent: true });
+          const result = await syncAfterAuth();
           if (enterAfterAuth) {
             state.entered = true;
             state.view = "home";
           }
-          showToast("Google conectado y progreso guardado.");
+          showToast(result === "downloaded" ? "Google conectado y progreso descargado." : "Google conectado y progreso guardado.");
           render();
         } catch (error) {
           showToast(error.message || "No pude conectar Google.");
@@ -3233,9 +3299,9 @@ function renderSettings() {
           <p>La coleccion sigue guardada en este navegador, separada del cache de instalacion.</p>
         </article>
         <article class="phase-card">
-          <strong>APK futura</strong>
-          <span>Preparada</span>
-          <p>Esta base PWA facilita empaquetar despues con Capacitor o TWA para Android.</p>
+          <strong>PWA instalada</strong>
+          <span>Ruta actual</span>
+          <p>La publicacion se mantiene como app web instalable desde el navegador.</p>
         </article>
       </div>
     </section>
