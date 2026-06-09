@@ -99,6 +99,14 @@ function publicUser(user) {
   };
 }
 
+async function createSession(env, userId) {
+  const token = randomHex(32);
+  await env.DB.prepare(
+    "INSERT INTO sessions (token, user_id, created_at, last_seen_at) VALUES (?, ?, ?, ?)"
+  ).bind(token, userId, now(), now()).run();
+  return token;
+}
+
 async function requireUser(request, env) {
   const token = getToken(request);
   if (!token) return null;
@@ -139,6 +147,12 @@ async function handleRequest(request, env) {
       }, 200, origin);
     }
 
+    if (request.method === "GET" && url.pathname === "/auth/config") {
+      return send({
+        googleClientId: env.GOOGLE_CLIENT_ID || ""
+      }, 200, origin);
+    }
+
     if (request.method === "POST" && url.pathname === "/auth/register") {
       const body = await readBody(request);
       const email = normalizeEmail(body.email);
@@ -161,16 +175,12 @@ async function handleRequest(request, env) {
         created_at: now(),
         updated_at: now()
       };
-      const token = randomHex(32);
-
       await env.DB.batch([
         env.DB.prepare(
           "INSERT INTO users (id, email, name, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
         ).bind(user.id, user.email, user.name, user.password_hash, user.created_at, user.updated_at),
-        env.DB.prepare(
-          "INSERT INTO sessions (token, user_id, created_at, last_seen_at) VALUES (?, ?, ?, ?)"
-        ).bind(token, user.id, now(), now())
       ]);
+      const token = await createSession(env, user.id);
 
       return send({ user: publicUser(user), token }, 201, origin);
     }
@@ -182,10 +192,44 @@ async function handleRequest(request, env) {
       if (!user || !(await verifyPassword(body.password || "", user.password_hash))) {
         return send({ error: "INVALID_CREDENTIALS", message: "Email o clave incorrectos." }, 401, origin);
       }
-      const token = randomHex(32);
-      await env.DB.prepare(
-        "INSERT INTO sessions (token, user_id, created_at, last_seen_at) VALUES (?, ?, ?, ?)"
-      ).bind(token, user.id, now(), now()).run();
+      const token = await createSession(env, user.id);
+      return send({ user: publicUser(user), token }, 200, origin);
+    }
+
+    if (request.method === "POST" && url.pathname === "/auth/google") {
+      if (!env.GOOGLE_CLIENT_ID) {
+        return send({ error: "GOOGLE_NOT_CONFIGURED", message: "Falta configurar Google Client ID." }, 400, origin);
+      }
+      const body = await readBody(request);
+      const credential = String(body.credential || "");
+      if (!credential) {
+        return send({ error: "INVALID_INPUT", message: "Falta token de Google." }, 400, origin);
+      }
+      const verifyResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+      const verified = await verifyResponse.json();
+      if (!verifyResponse.ok || verified.aud !== env.GOOGLE_CLIENT_ID || !["true", true].includes(verified.email_verified)) {
+        return send({ error: "INVALID_GOOGLE_TOKEN", message: "No pude validar Google." }, 401, origin);
+      }
+      const email = normalizeEmail(verified.email);
+      const name = String(verified.name || email.split("@")[0]).trim();
+      let user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
+      if (!user) {
+        user = {
+          id: `google-${verified.sub}`,
+          email,
+          name,
+          password_hash: `google:${verified.sub}`,
+          created_at: now(),
+          updated_at: now()
+        };
+        await env.DB.prepare(
+          "INSERT INTO users (id, email, name, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+        ).bind(user.id, user.email, user.name, user.password_hash, user.created_at, user.updated_at).run();
+      } else {
+        await env.DB.prepare("UPDATE users SET name = ?, updated_at = ? WHERE id = ?").bind(name, now(), user.id).run();
+        user = { ...user, name, updated_at: now() };
+      }
+      const token = await createSession(env, user.id);
       return send({ user: publicUser(user), token }, 200, origin);
     }
 

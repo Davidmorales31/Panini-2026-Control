@@ -90,6 +90,12 @@ function publicUser(user) {
   };
 }
 
+function createSession(db, userId) {
+  const token = randomBytes(32).toString("hex");
+  db.sessions.push({ token, userId, createdAt: now(), lastSeenAt: now() });
+  return token;
+}
+
 async function requireUser(request, response, db) {
   const session = findSession(db, getToken(request));
   if (!session) {
@@ -126,6 +132,11 @@ async function handleRequest(request, response) {
       return;
     }
 
+    if (request.method === "GET" && url.pathname === "/auth/config") {
+      send(response, 200, { googleClientId: process.env.GOOGLE_CLIENT_ID || "" });
+      return;
+    }
+
     if (request.method === "POST" && url.pathname === "/auth/register") {
       const body = await readBody(request);
       const email = normalizeEmail(body.email);
@@ -147,9 +158,8 @@ async function handleRequest(request, response) {
         createdAt: now(),
         updatedAt: now()
       };
-      const token = randomBytes(32).toString("hex");
       db.users.push(user);
-      db.sessions.push({ token, userId: user.id, createdAt: now(), lastSeenAt: now() });
+      const token = createSession(db, user.id);
       await saveDb(db);
       send(response, 201, { user: publicUser(user), token });
       return;
@@ -163,8 +173,47 @@ async function handleRequest(request, response) {
         send(response, 401, { error: "INVALID_CREDENTIALS", message: "Email o clave incorrectos." });
         return;
       }
-      const token = randomBytes(32).toString("hex");
-      db.sessions.push({ token, userId: user.id, createdAt: now(), lastSeenAt: now() });
+      const token = createSession(db, user.id);
+      await saveDb(db);
+      send(response, 200, { user: publicUser(user), token });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/auth/google") {
+      if (!process.env.GOOGLE_CLIENT_ID) {
+        send(response, 400, { error: "GOOGLE_NOT_CONFIGURED", message: "Falta configurar Google Client ID." });
+        return;
+      }
+      const body = await readBody(request);
+      const credential = String(body.credential || "");
+      if (!credential) {
+        send(response, 400, { error: "INVALID_INPUT", message: "Falta token de Google." });
+        return;
+      }
+      const verifyResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+      const verified = await verifyResponse.json();
+      if (!verifyResponse.ok || verified.aud !== process.env.GOOGLE_CLIENT_ID || !["true", true].includes(verified.email_verified)) {
+        send(response, 401, { error: "INVALID_GOOGLE_TOKEN", message: "No pude validar Google." });
+        return;
+      }
+      const email = normalizeEmail(verified.email);
+      const name = String(verified.name || email.split("@")[0]).trim();
+      let user = db.users.find((item) => item.email === email);
+      if (!user) {
+        user = {
+          id: `google-${verified.sub}`,
+          email,
+          name,
+          passwordHash: `google:${verified.sub}`,
+          createdAt: now(),
+          updatedAt: now()
+        };
+        db.users.push(user);
+      } else {
+        user.name = name;
+        user.updatedAt = now();
+      }
+      const token = createSession(db, user.id);
       await saveDb(db);
       send(response, 200, { user: publicUser(user), token });
       return;

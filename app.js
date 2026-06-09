@@ -5,6 +5,9 @@ const BRAND_LOGO_MARK = "assets/brand-logo-mark.png?v=1";
 const LANDING_BG = "assets/landing-bg.png?v=1";
 
 let deferredInstallPrompt = null;
+let saveTimer = null;
+let renderTimer = null;
+let googleIdentityPromise = null;
 
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
@@ -14,7 +17,11 @@ window.addEventListener("beforeinstallprompt", (event) => {
 window.addEventListener("appinstalled", () => {
   deferredInstallPrompt = null;
   showToast("App instalada en tu dispositivo.");
+  if (!state.entered) render();
 });
+
+window.addEventListener("pagehide", flushSaveData);
+window.addEventListener("beforeunload", flushSaveData);
 
 const navItems = [
   { id: "home", label: "Inicio", icon: "home" },
@@ -452,8 +459,29 @@ function buildAppDataFromCatalog(catalog, stored) {
   };
 }
 
-function saveData() {
+function flushSaveData() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+}
+
+function saveData({ immediate = false } = {}) {
+  if (immediate) {
+    flushSaveData();
+    return;
+  }
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(flushSaveData, 220);
+}
+
+function scheduleRender(delay = 80) {
+  if (renderTimer) clearTimeout(renderTimer);
+  renderTimer = setTimeout(() => {
+    renderTimer = null;
+    render();
+  }, delay);
 }
 
 function getPreferences() {
@@ -488,6 +516,10 @@ function getInventory(stickerId) {
     priority: false,
     reservedQuantity: 0
   };
+}
+
+function getStickerById(stickerId) {
+  return state.data.stickers.find((sticker) => sticker.id === stickerId);
 }
 
 function setInventory(stickerId, patch) {
@@ -1020,6 +1052,23 @@ function groupedBySection(stickers) {
     .filter((group) => group.stickers.length > 0);
 }
 
+function refreshStickerDom(stickerId) {
+  const sticker = getStickerById(stickerId);
+  if (!sticker) return;
+  const inv = getInventory(stickerId);
+  const status = stickerStatus(sticker);
+  document.querySelectorAll(`[data-sticker-card="${stickerId}"]`).forEach((card) => {
+    card.classList.remove("missing", "owned", "duplicate");
+    card.classList.add(status);
+  });
+  document.querySelectorAll(`[data-quantity-for="${stickerId}"]`).forEach((element) => {
+    element.textContent = inv.quantity;
+  });
+  document.querySelectorAll(`[data-pasted="${stickerId}"]`).forEach((button) => {
+    button.textContent = inv.pasted ? "Pegada" : "Sin pegar";
+  });
+}
+
 function updateQuantity(stickerId, delta) {
   const sticker = state.data.stickers.find((item) => item.id === stickerId);
   const inv = getInventory(stickerId);
@@ -1031,7 +1080,8 @@ function updateQuantity(stickerId, delta) {
   if (sticker) {
     addActivity(`${delta > 0 ? "Sumaste" : "Ajustaste"} lamina ${sticker.code}`);
   }
-  render();
+  refreshStickerDom(stickerId);
+  scheduleRender(state.view === "album" ? 160 : 40);
 }
 
 function togglePriority(stickerId) {
@@ -1486,10 +1536,10 @@ function updateCloudAccountFromAuth(payload) {
     userId: payload.user.id,
     userName: payload.user.name,
     token: payload.token,
-    provider: "api-propia",
+    provider: payload.provider || normalizeCloudAccount(state.data.cloudAccount).provider || "cloudflare",
     status: "conectada"
   };
-  saveData();
+  saveData({ immediate: true });
 }
 
 async function registerCloudUser() {
@@ -1506,8 +1556,9 @@ async function registerCloudUser() {
       })
     });
     updateCloudAccountFromAuth(payload);
-    addActivity("Creaste cuenta en API propia");
-    showToast("Cuenta creada y conectada.");
+    addActivity("Creaste cuenta propia");
+    await uploadCloudData({ silent: true });
+    showToast("Cuenta creada, progreso guardado en nube.");
     render();
   } catch (error) {
     showToast(error.message || "No pude crear la cuenta.");
@@ -1524,7 +1575,7 @@ async function loginCloudUser() {
       body: JSON.stringify({ email: account.email, password })
     });
     updateCloudAccountFromAuth(payload);
-    addActivity("Iniciaste sesion en API propia");
+    addActivity("Iniciaste sesion con cuenta propia");
     showToast("Sesion conectada.");
     render();
   } catch (error) {
@@ -1532,8 +1583,9 @@ async function loginCloudUser() {
   }
 }
 
-async function uploadCloudData() {
+async function uploadCloudData({ silent = false } = {}) {
   try {
+    flushSaveData();
     const account = normalizeCloudAccount(state.data.cloudAccount);
     if (!account.token) {
       showToast("Primero inicia sesion en la API.");
@@ -1551,12 +1603,12 @@ async function uploadCloudData() {
       lastSyncAt: payload.updatedAt || new Date().toISOString(),
       status: "sincronizada"
     };
-    saveData();
-    addActivity("Subiste coleccion a API propia");
-    showToast("Coleccion subida a la API.");
-    render();
+    saveData({ immediate: true });
+    addActivity("Subiste coleccion a la nube");
+    if (!silent) showToast("Coleccion subida a la nube.");
+    if (!silent) render();
   } catch (error) {
-    showToast(error.message || "No pude subir a la API.");
+    if (!silent) showToast(error.message || "No pude subir a la API.");
   }
 }
 
@@ -1589,16 +1641,72 @@ async function downloadCloudData() {
       userName: account.userName,
       email: account.email,
       apiBaseUrl: account.apiBaseUrl,
-      provider: "api-propia",
+      provider: account.provider || "cloudflare",
       lastSyncAt: payload.updatedAt || new Date().toISOString(),
       status: "sincronizada"
     };
-    saveData();
-    addActivity("Bajaste coleccion desde API propia");
+    saveData({ immediate: true });
+    addActivity("Bajaste coleccion desde la nube");
     showToast("Coleccion descargada desde API.");
     render();
   } catch (error) {
     showToast(error.message || "No pude bajar desde la API.");
+  }
+}
+
+async function getAuthConfig() {
+  return apiRequest("/auth/config", { method: "GET" });
+}
+
+function loadGoogleIdentityScript() {
+  if (window.google?.accounts?.id) return Promise.resolve();
+  if (googleIdentityPromise) return googleIdentityPromise;
+  googleIdentityPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = resolve;
+    script.onerror = () => reject(new Error("No pude cargar Google Sign-In."));
+    document.head.appendChild(script);
+  });
+  return googleIdentityPromise;
+}
+
+async function loginWithGoogle() {
+  try {
+    persistCloudAccountFromForm();
+    const config = await getAuthConfig();
+    if (!config.googleClientId) {
+      showToast("Falta configurar Google Client ID en Cloudflare.");
+      return;
+    }
+    await loadGoogleIdentityScript();
+    window.google.accounts.id.initialize({
+      client_id: config.googleClientId,
+      callback: async (response) => {
+        try {
+          const payload = await apiRequest("/auth/google", {
+            method: "POST",
+            body: JSON.stringify({ credential: response.credential })
+          });
+          updateCloudAccountFromAuth({ ...payload, provider: "google" });
+          addActivity("Iniciaste sesion con Google");
+          await uploadCloudData({ silent: true });
+          showToast("Google conectado y progreso guardado.");
+          render();
+        } catch (error) {
+          showToast(error.message || "No pude conectar Google.");
+        }
+      }
+    });
+    window.google.accounts.id.prompt((notification) => {
+      if (notification.isNotDisplayed?.() || notification.isSkippedMoment?.()) {
+        showToast("Google no mostro el acceso. Revisa el Client ID.");
+      }
+    });
+  } catch (error) {
+    showToast(error.message || "No pude iniciar con Google.");
   }
 }
 
@@ -1861,7 +1969,7 @@ function enterApp() {
 }
 
 function renderLanding() {
-  const showDownload = isMobileOrTablet();
+  const showDownload = isMobileOrTablet() && !isStandaloneApp();
   const app = document.getElementById("app");
   app.innerHTML = `
     <main class="landing-screen" style="--landing-bg:url('${LANDING_BG}')">
@@ -2415,7 +2523,7 @@ function renderStickerCard(sticker) {
   const statusClass = status === "missing" ? "warn" : status === "duplicate" ? "info" : "good";
   const simple = isSimpleCardView();
   return `
-    <article class="sticker-card ${status} ${simple ? "simple-card" : ""}" style="${flagStyle(visual)}">
+    <article class="sticker-card ${status} ${simple ? "simple-card" : ""}" data-sticker-card="${sticker.id}" style="${flagStyle(visual)}">
       <div class="sticker-top">
         <strong>${escapeHtml(sticker.code)}</strong>
         <span class="chip ${statusClass}">${statusLabel}</span>
@@ -2431,7 +2539,7 @@ function renderStickerCard(sticker) {
       </div>
       <div class="sticker-actions" aria-label="Controles de cantidad">
         <button class="step-button" data-dec="${sticker.id}" title="Restar cantidad" type="button">-</button>
-        <span class="count-pill">${inv.quantity}</span>
+        <span class="count-pill" data-quantity-for="${sticker.id}">${inv.quantity}</span>
         <button class="step-button add" data-inc="${sticker.id}" title="Sumar cantidad" type="button">+</button>
         <button class="button tiny secondary" data-pasted="${sticker.id}" type="button">${inv.pasted ? "Pegada" : "Sin pegar"}</button>
         <button class="priority-button ${inv.priority ? "active" : ""}" data-priority="${sticker.id}" title="Marcar prioridad" type="button">
@@ -3114,7 +3222,7 @@ function renderSettings() {
       <div class="section-title-row">
         <div>
           <h3 class="panel-title">Fase 10: API propia y nube</h3>
-          <p class="page-copy">Conecta esta app con nuestro backend Node para login y sincronizacion PC/celular.</p>
+          <p class="page-copy">Sin login guarda local en este dispositivo. Con cuenta propia o Google sincroniza PC/celular en Cloudflare.</p>
         </div>
       </div>
       <div class="settings-grid sync-grid">
@@ -3135,6 +3243,7 @@ function renderSettings() {
           <select class="select" id="cloudProvider">
             <option value="api-propia" ${cloudAccount.provider === "api-propia" ? "selected" : ""}>API local</option>
             <option value="cloudflare" ${cloudAccount.provider === "cloudflare" ? "selected" : ""}>Cloudflare gratis</option>
+            <option value="google" ${cloudAccount.provider === "google" ? "selected" : ""}>Google</option>
             <option value="supabase" ${cloudAccount.provider === "supabase" ? "selected" : ""}>Supabase alternativa</option>
             <option value="firebase" ${cloudAccount.provider === "firebase" ? "selected" : ""}>Firebase futuro</option>
           </select>
@@ -3155,12 +3264,14 @@ function renderSettings() {
       <div class="toolbar" style="margin-top:14px">
         <button class="button" id="saveCloudAccount" type="button">Guardar cuenta</button>
         <button class="button secondary" id="checkApiConnection" type="button">Probar API</button>
+        <button class="button secondary google-button" id="loginGoogleUser" type="button">Google</button>
         <button class="button secondary" id="registerCloudUser" type="button">Crear cuenta</button>
         <button class="button secondary" id="loginCloudUser" type="button">Iniciar sesion</button>
         <button class="button secondary" id="uploadCloudData" type="button">Subir coleccion</button>
         <button class="button secondary" id="downloadCloudData" type="button">Bajar coleccion</button>
         <button class="button secondary" id="markCloudSync" type="button">Marcar punto sync</button>
       </div>
+      <p class="sync-note">Tu avance siempre tiene respaldo local. La nube se usa solo cuando conectas una cuenta.</p>
     </section>
     <section class="panel" style="margin-top:16px">
       <h3 class="panel-title">Historial reciente</h3>
@@ -3495,6 +3606,9 @@ function bindEvents() {
 
   const loginCloudButton = document.getElementById("loginCloudUser");
   if (loginCloudButton) loginCloudButton.addEventListener("click", loginCloudUser);
+
+  const loginGoogleButton = document.getElementById("loginGoogleUser");
+  if (loginGoogleButton) loginGoogleButton.addEventListener("click", loginWithGoogle);
 
   const uploadCloudButton = document.getElementById("uploadCloudData");
   if (uploadCloudButton) uploadCloudButton.addEventListener("click", uploadCloudData);
