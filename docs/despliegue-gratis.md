@@ -113,6 +113,40 @@ En la app:
 5. Presiona `Subir coleccion`.
 6. En otro dispositivo inicia sesion y presiona `Bajar coleccion`.
 
+## 5.1 Login Con Google
+
+La app ya soporta `Google`, pero Google exige crear un OAuth Client ID.
+
+En Google Cloud:
+
+1. Entra a `APIs & Services`.
+2. Abre `OAuth consent screen`.
+3. Configura una app externa o de prueba.
+4. Luego entra a `Credentials`.
+5. Crea `OAuth client ID`.
+6. Tipo: `Web application`.
+7. En `Authorized JavaScript origins` agrega:
+
+```text
+https://panini-2026-control.juandavidmoralesparra31.workers.dev
+```
+
+8. Copia el `Client ID`.
+
+En Cloudflare:
+
+1. Abre el Worker `panini-2026-control`.
+2. Entra a `Settings > Variables and secrets`.
+3. Agrega una variable:
+
+```text
+GOOGLE_CLIENT_ID = TU_CLIENT_ID_DE_GOOGLE
+```
+
+4. Redeploya el Worker.
+
+Despues de eso, el boton `Google` en Ajustes podra iniciar sesion y guardar el progreso en D1.
+
 ## 6. Android
 
 Cuando la web y la API ya esten publicadas:
