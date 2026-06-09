@@ -1801,6 +1801,10 @@ body {
   justify-items: center;
 }
 
+.mobile-progress-highlight {
+  display: none;
+}
+
 .progress-panel .panel-title {
   justify-self: start;
   width: 100%;
@@ -3030,6 +3034,15 @@ body {
   .dashboard-main-panel .filters,
   .dashboard-side {
     grid-template-columns: 1fr;
+  }
+
+  .mobile-progress-highlight {
+    display: grid;
+    margin: 12px 0;
+  }
+
+  .dashboard-side .progress-panel {
+    display: none;
   }
 
   .section-title-row {

@@ -1,7 +1,7 @@
 {
   "appId": "com.mialbummundialista.app",
   "appName": "Mi Album Mundialista 2026",
-  "webDir": ".",
+  "webDir": "dist",
   "server": {
     "androidScheme": "https"
   },

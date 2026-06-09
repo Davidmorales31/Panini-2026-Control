@@ -14,10 +14,10 @@ Requisitos:
 Comandos esperados:
 
 ```powershell
-npm install @capacitor/core @capacitor/cli @capacitor/android
+npm install
 npx cap add android
-npx cap sync android
-npx cap open android
+npm run android:sync
+npm run android:open
 ```
 
 En Android Studio:
@@ -27,11 +27,13 @@ En Android Studio:
 
 ## Backend En Android
 
-El celular no puede usar `127.0.0.1:8787` para llegar al PC. Opciones:
+La app ya usa la API publicada:
 
-- Publicar la API propia en un servidor HTTPS.
-- Usar la IP local del PC en la misma red, por ejemplo `http://192.168.1.20:8787`.
-- Para produccion, usar dominio con HTTPS.
+```text
+https://panini-2026-control.juandavidmoralesparra31.workers.dev
+```
+
+Si en un dispositivo queda una URL local vieja como `127.0.0.1`, la app publicada la corrige automaticamente.
 
 ## Identidad
 
@@ -50,4 +52,5 @@ Configuracion base:
 - Firma de release.
 - Politica de privacidad.
 - HTTPS obligatorio.
-- Backend con base de datos real.
+- Prueba de login Google en Android instalado.
+- Generar AAB para Play Store.

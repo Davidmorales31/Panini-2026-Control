@@ -581,27 +581,41 @@ function openTeamRegister() {
     state.data.sections[0];
   const current = getSection(state.teamRegisterSectionId);
   state.teamRegisterSectionId = !current || current.count <= 1 ? firstSection?.id : current.id;
-  state.teamRegisterSelectedIds = new Set(getSectionStickers(state.teamRegisterSectionId).map((sticker) => sticker.id));
+  state.teamRegisterSelectedIds = getOwnedTeamStickerIds(state.teamRegisterSectionId);
   state.activeModal = "team-register";
   render();
 }
 
 function changeTeamRegisterSection(sectionId) {
   state.teamRegisterSectionId = sectionId;
-  state.teamRegisterSelectedIds = new Set(getSectionStickers(sectionId).map((sticker) => sticker.id));
+  state.teamRegisterSelectedIds = getOwnedTeamStickerIds(sectionId);
   render();
+}
+
+function getOwnedTeamStickerIds(sectionId) {
+  return new Set(getSectionStickers(sectionId).filter((sticker) => getInventory(sticker.id).quantity > 0).map((sticker) => sticker.id));
+}
+
+function updateTeamRegisterCounter() {
+  const counter = document.getElementById("teamRegisterCounter");
+  if (!counter) return;
+  const total = getSectionStickers(state.teamRegisterSectionId).length;
+  counter.textContent = `${state.teamRegisterSelectedIds.size}/${total} seleccionadas`;
 }
 
 function toggleTeamSticker(stickerId) {
   if (state.teamRegisterSelectedIds.has(stickerId)) state.teamRegisterSelectedIds.delete(stickerId);
   else state.teamRegisterSelectedIds.add(stickerId);
-  render();
+  updateTeamRegisterCounter();
 }
 
 function setAllTeamStickers(selected) {
   const ids = getSectionStickers(state.teamRegisterSectionId).map((sticker) => sticker.id);
   state.teamRegisterSelectedIds = new Set(selected ? ids : []);
-  render();
+  document.querySelectorAll("[data-team-sticker]").forEach((input) => {
+    input.checked = selected;
+  });
+  updateTeamRegisterCounter();
 }
 
 function confirmTeamRegister() {
@@ -2110,7 +2124,7 @@ function renderTeamRegisterModal() {
         <div class="modal-head">
           <div>
             <h3>${t("registerByTeam")}</h3>
-            <p>${escapeHtml(section?.name || "")} - ${state.teamRegisterSelectedIds.size}/${stickers.length} seleccionadas</p>
+            <p>${escapeHtml(section?.name || "")} - <span id="teamRegisterCounter">${state.teamRegisterSelectedIds.size}/${stickers.length} seleccionadas</span></p>
           </div>
           <button class="button icon secondary" data-close-modal type="button">${renderIcon("x")}</button>
         </div>
@@ -2245,6 +2259,17 @@ function renderHome() {
             <span>Faltantes, repetidas, progreso y cambios en un solo lugar.</span>
           </div>
         </div>
+        <section class="panel progress-panel mobile-progress-highlight">
+          <h3 class="panel-title">Progreso del album</h3>
+          <div class="progress-ring" style="${progressStyle}">
+            <div class="progress-ring-inner">
+              <div>
+                <strong>${stats.progress}%</strong>
+                <span>${stats.owned} / ${stats.total}</span>
+              </div>
+            </div>
+          </div>
+        </section>
         ${renderFilters({ showToggle: false })}
         <div class="section-title-row">
           <h3 class="panel-title">Mis Figuritas <span>${stats.owned} / ${stats.total}</span></h3>
