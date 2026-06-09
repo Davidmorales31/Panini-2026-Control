@@ -1673,7 +1673,7 @@ function loadGoogleIdentityScript() {
   return googleIdentityPromise;
 }
 
-async function loginWithGoogle() {
+async function loginWithGoogle({ enterAfterAuth = false } = {}) {
   try {
     persistCloudAccountFromForm();
     const config = await getAuthConfig();
@@ -1693,6 +1693,10 @@ async function loginWithGoogle() {
           updateCloudAccountFromAuth({ ...payload, provider: "google" });
           addActivity("Iniciaste sesion con Google");
           await uploadCloudData({ silent: true });
+          if (enterAfterAuth) {
+            state.entered = true;
+            state.view = "home";
+          }
           showToast("Google conectado y progreso guardado.");
           render();
         } catch (error) {
@@ -1968,6 +1972,13 @@ function enterApp() {
   render();
 }
 
+function openAccountLogin() {
+  state.entered = true;
+  state.view = "settings";
+  render();
+  setTimeout(() => document.getElementById("cloudEmail")?.focus(), 50);
+}
+
 function renderLanding() {
   const showDownload = isMobileOrTablet() && !isStandaloneApp();
   const app = document.getElementById("app");
@@ -1978,7 +1989,14 @@ function renderLanding() {
         <div class="landing-actions">
           <button class="button landing-primary" id="enterApp" type="button">
             ${renderIcon("log-in")}
-            <span>Entrar ya</span>
+            <span>Entrar local</span>
+          </button>
+          <button class="button secondary google-button" id="landingGoogleLogin" type="button">
+            <span>Google</span>
+          </button>
+          <button class="button secondary" id="landingAccountLogin" type="button">
+            ${renderIcon("user")}
+            <span>Cuenta propia</span>
           </button>
           ${
             showDownload
@@ -3644,6 +3662,14 @@ function bindEvents() {
 function bindLandingEvents() {
   const enterButton = document.getElementById("enterApp");
   if (enterButton) enterButton.addEventListener("click", enterApp);
+
+  const landingGoogleButton = document.getElementById("landingGoogleLogin");
+  if (landingGoogleButton) {
+    landingGoogleButton.addEventListener("click", () => loginWithGoogle({ enterAfterAuth: true }));
+  }
+
+  const landingAccountButton = document.getElementById("landingAccountLogin");
+  if (landingAccountButton) landingAccountButton.addEventListener("click", openAccountLogin);
 
   const downloadButton = document.getElementById("downloadApp");
   if (downloadButton) {
