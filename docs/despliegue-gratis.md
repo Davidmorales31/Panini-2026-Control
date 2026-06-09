@@ -27,12 +27,14 @@ En Cloudflare:
 
 ```text
 Framework preset: None
-Build command: dejar vacio
-Build output directory: /
+Build command: npm run build
+Build output directory: dist
 Root directory: /
 ```
 
 5. Publica.
+
+Si Cloudflare te muestra algo de `wrangler deploy`, `wrangler.jsonc` o assets con directorio `.`, estas en el flujo de Workers, no en Pages clasico. Vuelve a `Workers & Pages > Pages > Connect to Git` y usa los valores anteriores.
 
 Al final Cloudflare te dara una URL parecida a:
 

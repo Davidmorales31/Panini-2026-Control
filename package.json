@@ -6,6 +6,7 @@
   "scripts": {
     "web": "node dev-server.mjs",
     "api": "node backend/server.mjs",
+    "build": "node scripts/build-static.mjs",
     "check": "node --check app.js && node --check sw.js && node --check backend/server.mjs",
     "check:cloudflare": "node --check cloudflare/worker.js",
     "android:notes": "node -e \"console.log('Instala Capacitor y Android Studio. Lee docs/android-build.md')\""
