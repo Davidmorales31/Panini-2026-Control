@@ -10,6 +10,8 @@ const entries = [
   "styles.css",
   "manifest.json",
   "sw.js",
+  "robots.txt",
+  "sitemap.xml",
   "assets",
   "data"
 ];
