@@ -111,6 +111,15 @@ Criterios:
 - Incluye una llamada a crear el propio control del album.
 - Funciona sin iniciar sesion.
 
+**HU-012C Comparador publico**
+Como visitante de un enlace compartido, quiero pegar mis codigos para saber si puedo hacer un intercambio.
+
+Criterios:
+- Puedo pegar faltantes o repetidas sin iniciar sesion.
+- La app muestra cuantos codigos le puedo ofrecer al coleccionista.
+- La app muestra cuantos codigos me puede ofrecer el coleccionista.
+- El enlace publico no requiere backend para funcionar.
+
 ### Epic 5: Dashboard
 
 **HU-013 Resumen inicial**

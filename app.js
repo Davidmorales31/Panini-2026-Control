@@ -251,6 +251,7 @@ const state = {
     note: ""
   },
   compareText: "",
+  publicCompareText: "",
   activeModal: null,
   teamRegisterSectionId: null,
   teamRegisterSelectedIds: new Set(),
@@ -983,8 +984,11 @@ function shortPublicText(value, fallback = "") {
 function buildPublicSharePayload() {
   const stats = getStats();
   const profile = normalizeProfile(state.data.profile);
+  const maxCodes = 320;
+  const missingCodes = missingStickers().slice(0, maxCodes).map((sticker) => sticker.code);
+  const duplicateCodes = duplicateStickers().slice(0, maxCodes).map((sticker) => sticker.code);
   return {
-    v: 1,
+    v: 2,
     name: shortPublicText(profile.alias || profile.collectorName, "Coleccionista mundialista"),
     city: shortPublicText(profile.city),
     progress: stats.progress,
@@ -993,13 +997,16 @@ function buildPublicSharePayload() {
     missing: stats.missing,
     duplicates: stats.duplicates,
     priority: stats.priority,
+    m: missingCodes,
+    d: duplicateCodes,
+    capped: missingCodes.length < stats.missing || duplicateCodes.length < duplicateStickers().length,
     at: new Date().toISOString().slice(0, 10)
   };
 }
 
 function buildPublicShareUrl() {
   const payload = encodeURIComponent(JSON.stringify(buildPublicSharePayload()));
-  return `${getPublicAppUrl()}?public=${payload}`;
+  return `${getPublicAppUrl()}?source=share&public=${payload}`;
 }
 
 function parsePublicSharePayload() {
@@ -1018,11 +1025,28 @@ function parsePublicSharePayload() {
       missing: Math.max(0, Number(payload.missing || 0)),
       duplicates: Math.max(0, Number(payload.duplicates || 0)),
       priority: Math.max(0, Number(payload.priority || 0)),
+      missingCodes: Array.isArray(payload.m) ? payload.m.map(normalizeCode).filter(Boolean).slice(0, 360) : [],
+      duplicateCodes: Array.isArray(payload.d) ? payload.d.map(normalizeCode).filter(Boolean).slice(0, 360) : [],
+      capped: Boolean(payload.capped),
       at: shortPublicText(payload.at)
     };
   } catch (error) {
     return null;
   }
+}
+
+function comparePublicShareList(publicShare, text = state.publicCompareText) {
+  const analysis = analyzeStickerText(text);
+  const visitorCodes = new Set(analysis.valid.map((sticker) => compactCode(sticker.code)));
+  const missingMatches = (publicShare?.missingCodes || []).filter((code) => visitorCodes.has(compactCode(code)));
+  const duplicateMatches = (publicShare?.duplicateCodes || []).filter((code) => visitorCodes.has(compactCode(code)));
+  return {
+    typed: Boolean(String(text || "").trim()),
+    unknown: analysis.invalid,
+    visitorCount: analysis.valid.length,
+    canOffer: [...new Set(missingMatches)],
+    canAsk: [...new Set(duplicateMatches)]
+  };
 }
 
 function buildPublicSummaryText() {
@@ -2226,7 +2250,7 @@ async function installApp() {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   const register = () => {
-    navigator.serviceWorker.register("sw.js?v=6").catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=7").catch(() => {});
   };
   if (document.readyState === "complete") {
     register();
@@ -2285,6 +2309,7 @@ function renderLanding() {
 function renderPublicLandingCard(publicShare) {
   const progress = `${publicShare.progress}%`;
   const location = publicShare.city ? ` - ${escapeHtml(publicShare.city)}` : "";
+  const comparison = comparePublicShareList(publicShare);
   return `
     <article class="landing-public-card" style="--public-progress:${publicShare.progress}%">
       <span class="landing-public-kicker">Resumen compartido</span>
@@ -2298,7 +2323,46 @@ function renderPublicLandingCard(publicShare) {
         <span><b>${publicShare.missing}</b> faltantes</span>
         <span><b>${publicShare.duplicates}</b> repetidas</span>
       </div>
+      <div class="public-compare">
+        <label>
+          <span>Compara con tu lista</span>
+          <textarea id="publicCompareText" class="textarea compact" placeholder="Pega tus codigos: COL 20, ARG 12, CC 1">${escapeHtml(state.publicCompareText)}</textarea>
+        </label>
+        ${renderPublicCompareResult(publicShare, comparison)}
+      </div>
     </article>
+  `;
+}
+
+function renderPublicCompareResult(publicShare, comparison) {
+  if (!publicShare.missingCodes.length && !publicShare.duplicateCodes.length) {
+    return `<p class="public-compare-note">Este enlace solo trae resumen de avance. Pidele a ${escapeHtml(publicShare.name)} que comparta desde la version nueva para comparar codigos.</p>`;
+  }
+
+  if (!comparison.typed) {
+    return `<p class="public-compare-note">Pega tus faltantes o repetidas y te digo si hay intercambio posible.</p>`;
+  }
+
+  return `
+    <div class="public-compare-grid">
+      <article>
+        <strong>Le puedes ofrecer</strong>
+        <b>${comparison.canOffer.length}</b>
+        <span>${comparison.canOffer.length ? comparison.canOffer.slice(0, 18).join(", ") : "Sin cruce con sus faltantes."}</span>
+      </article>
+      <article>
+        <strong>Te puede ofrecer</strong>
+        <b>${comparison.canAsk.length}</b>
+        <span>${comparison.canAsk.length ? comparison.canAsk.slice(0, 18).join(", ") : "Sin cruce con sus repetidas."}</span>
+      </article>
+    </div>
+    ${
+      comparison.unknown.length
+        ? `<p class="public-compare-note">No reconocidas: ${escapeHtml(comparison.unknown.slice(0, 12).join(", "))}</p>`
+        : publicShare.capped
+          ? `<p class="public-compare-note">Comparacion con muestra compacta del enlace. Para lista completa, comparte el resumen por WhatsApp.</p>`
+          : `<p class="public-compare-note">Comparacion lista con ${comparison.visitorCount} codigos leidos.</p>`
+    }
   `;
 }
 
@@ -4021,6 +4085,17 @@ function bindLandingEvents() {
 
   const landingAccountButton = document.getElementById("landingAccountLogin");
   if (landingAccountButton) landingAccountButton.addEventListener("click", openAccountLogin);
+
+  const publicCompareText = document.getElementById("publicCompareText");
+  if (publicCompareText) {
+    publicCompareText.addEventListener("input", (event) => {
+      state.publicCompareText = event.target.value;
+      render();
+      const nextInput = document.getElementById("publicCompareText");
+      nextInput?.focus();
+      nextInput?.setSelectionRange(state.publicCompareText.length, state.publicCompareText.length);
+    });
+  }
 
   const downloadButton = document.getElementById("downloadApp");
   if (downloadButton) {

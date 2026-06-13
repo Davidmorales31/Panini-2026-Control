@@ -71,6 +71,17 @@ Entregables:
 - CTA para crear control propio desde enlaces compartidos.
 - Copiar enlace y compartir nativo desde el modulo Compartir.
 - Shortcuts PWA hacia Registrar y Faltantes.
+- `robots.txt` y `sitemap.xml` para indexacion basica.
+
+## Fase 12 - Comparador Publico Viral
+
+Objetivo: convertir cada enlace compartido en una herramienta util para la otra persona.
+
+Entregables:
+- El enlace publico incluye una muestra compacta de faltantes y repetidas.
+- La landing publica permite pegar codigos propios.
+- La app calcula que puede ofrecer el visitante y que puede pedirle al coleccionista.
+- El enlace queda marcado con `source=share` para futura analitica.
 
 ## Decision Tecnica Recomendada
 

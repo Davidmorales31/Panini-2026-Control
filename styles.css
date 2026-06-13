@@ -1379,6 +1379,64 @@ button {
   font-weight: 950;
 }
 
+.public-compare {
+  display: grid;
+  gap: 10px;
+  margin-top: 2px;
+  text-align: left;
+}
+
+.public-compare label {
+  display: grid;
+  gap: 6px;
+  color: #52627d;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.public-compare .textarea {
+  min-height: 78px;
+  border-color: rgba(8, 32, 74, 0.16);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 0.86rem;
+}
+
+.public-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.public-compare-grid article {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(8, 32, 74, 0.1);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.public-compare-grid strong {
+  color: #52627d;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.public-compare-grid b {
+  color: #08204a;
+  font-size: 1.24rem;
+  font-weight: 950;
+}
+
+.public-compare-grid span,
+.public-compare-note {
+  margin: 0;
+  color: #52627d;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .landing-primary {
   border-color: #08204a;
   background: #ffd800;

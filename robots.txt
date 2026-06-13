@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://panini-2026-control.juandavidmoralesparra31.workers.dev/sitemap.xml
