@@ -100,6 +100,16 @@ Criterios:
 - Genera texto listo para copiar.
 - Incluye nombre del album.
 - Permite formato corto y formato por secciones.
+- Incluye un enlace publico hacia la app para atraer nuevos usuarios.
+
+**HU-012B Resumen publico viral**
+Como coleccionista, quiero compartir un enlace publico de mi avance para que mis amigos vean mi progreso y creen su propio control.
+
+Criterios:
+- El enlace no expone datos privados ni inventario completo.
+- Muestra avance, pegadas, faltantes y repetidas.
+- Incluye una llamada a crear el propio control del album.
+- Funciona sin iniciar sesion.
 
 ### Epic 5: Dashboard
 

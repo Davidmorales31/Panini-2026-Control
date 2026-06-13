@@ -1,13 +1,32 @@
 {
   "name": "Mi Album Mundialista 2026",
   "short_name": "Album 2026",
+  "lang": "es",
   "id": "/",
-  "description": "Control de laminas, faltantes y repetidas para Mi Album Mundialista 2026.",
-  "start_url": "./index.html",
+  "description": "Control de laminas, faltantes, repetidas, progreso e intercambios para Mi Album Mundialista 2026.",
+  "start_url": "./index.html?source=pwa",
   "scope": "./",
   "display": "standalone",
+  "orientation": "portrait-primary",
+  "categories": ["sports", "productivity", "utilities"],
   "background_color": "#F4F7FB",
   "theme_color": "#08204A",
+  "shortcuts": [
+    {
+      "name": "Registrar laminas",
+      "short_name": "Registrar",
+      "description": "Agregar codigos al album",
+      "url": "./index.html?shortcut=register",
+      "icons": [{ "src": "assets/app-icon.png", "sizes": "512x512", "type": "image/png" }]
+    },
+    {
+      "name": "Ver faltantes",
+      "short_name": "Faltantes",
+      "description": "Abrir lista de faltantes",
+      "url": "./index.html?shortcut=missing",
+      "icons": [{ "src": "assets/app-icon.png", "sizes": "512x512", "type": "image/png" }]
+    }
+  ],
   "icons": [
     {
       "src": "assets/app-icon.png",

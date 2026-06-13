@@ -4,6 +4,7 @@ const CATALOG_URL = "data/catalog-world-cup-2026.json?v=2";
 const BRAND_LOGO_FULL = "assets/brand-logo-full.png?v=1";
 const BRAND_LOGO_MARK = "assets/brand-logo-mark.png?v=1";
 const LANDING_BG = "assets/landing-bg.png?v=1";
+const PRODUCTION_APP_URL = "https://panini-2026-control.juandavidmoralesparra31.workers.dev/";
 
 let deferredInstallPrompt = null;
 let saveTimer = null;
@@ -966,13 +967,78 @@ function buildProgressText() {
   ].join("\n");
 }
 
+function getPublicAppUrl() {
+  const origin = window.location?.origin || "";
+  if (origin.includes("workers.dev") || origin.includes("pages.dev")) return `${origin}/`;
+  return PRODUCTION_APP_URL;
+}
+
+function shortPublicText(value, fallback = "") {
+  return String(value || fallback)
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 48);
+}
+
+function buildPublicSharePayload() {
+  const stats = getStats();
+  const profile = normalizeProfile(state.data.profile);
+  return {
+    v: 1,
+    name: shortPublicText(profile.alias || profile.collectorName, "Coleccionista mundialista"),
+    city: shortPublicText(profile.city),
+    progress: stats.progress,
+    owned: stats.owned,
+    total: stats.total,
+    missing: stats.missing,
+    duplicates: stats.duplicates,
+    priority: stats.priority,
+    at: new Date().toISOString().slice(0, 10)
+  };
+}
+
+function buildPublicShareUrl() {
+  const payload = encodeURIComponent(JSON.stringify(buildPublicSharePayload()));
+  return `${getPublicAppUrl()}?public=${payload}`;
+}
+
+function parsePublicSharePayload() {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const raw = params.get("public");
+    if (!raw) return null;
+    const payload = JSON.parse(raw.trim().startsWith("{") ? raw : decodeURIComponent(raw));
+    if (!payload || Number(payload.total) <= 0) return null;
+    return {
+      name: shortPublicText(payload.name, "Coleccionista mundialista"),
+      city: shortPublicText(payload.city),
+      progress: Math.max(0, Math.min(100, Number(payload.progress || 0))),
+      owned: Math.max(0, Number(payload.owned || 0)),
+      total: Math.max(0, Number(payload.total || 0)),
+      missing: Math.max(0, Number(payload.missing || 0)),
+      duplicates: Math.max(0, Number(payload.duplicates || 0)),
+      priority: Math.max(0, Number(payload.priority || 0)),
+      at: shortPublicText(payload.at)
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
 function buildPublicSummaryText() {
+  const publicUrl = buildPublicShareUrl();
   return [
     buildProgressText(),
     "",
-    buildShareText("missing"),
+    buildShareText("missing", false, false),
     "",
-    buildShareText("duplicates")
+    buildShareText("duplicates", false, false),
+    "",
+    "Resumen publico:",
+    publicUrl,
+    "",
+    "Crea tu propio control del album aqui:",
+    getPublicAppUrl()
   ].join("\n");
 }
 
@@ -1383,7 +1449,7 @@ function copyTradeMessage(tradeId) {
   copyText(buildTradeMessage(trade));
 }
 
-function buildShareText(type, useCurrentFilters = false) {
+function buildShareText(type, useCurrentFilters = false, includePublicLink = true) {
   const base = type === "missing" ? missingStickers() : duplicateStickers();
   const stickers = useCurrentFilters ? filterListStickers(base) : base;
   const isMissing = type === "missing";
@@ -1391,7 +1457,11 @@ function buildShareText(type, useCurrentFilters = false) {
   const total = isMissing
     ? stickers.length
     : stickers.reduce((sum, sticker) => sum + Math.max(0, getInventory(sticker.id).quantity - 1), 0);
-  if (!stickers.length) return `${title} - Mi Album Mundialista 2026\n\nNo tengo ${isMissing ? "faltantes" : "repetidas"} por ahora.`;
+  if (!stickers.length) {
+    const emptyLines = [`${title} - Mi Album Mundialista 2026`, "", `No tengo ${isMissing ? "faltantes" : "repetidas"} por ahora.`];
+    if (includePublicLink) emptyLines.push("", "Mira mi control del album:", buildPublicShareUrl());
+    return emptyLines.join("\n");
+  }
 
   const lines = [
     `${title} - Mi Album Mundialista 2026`,
@@ -1412,6 +1482,11 @@ function buildShareText(type, useCurrentFilters = false) {
     lines.push("");
   });
   lines.push(isMissing ? "Tienes alguna para cambiar?" : "Te sirve alguna para cambiar?");
+  if (includePublicLink) {
+    lines.push("");
+    lines.push("Mira mi control del album:");
+    lines.push(buildPublicShareUrl());
+  }
   return lines.join("\n");
 }
 
@@ -1434,6 +1509,26 @@ async function copyText(text) {
 function openWhatsApp(text) {
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
   trackMobileInstallAction({ important: true });
+}
+
+async function sharePublicLink() {
+  const url = buildPublicShareUrl();
+  const stats = getStats();
+  const text = `Mi Album Mundialista 2026 va en ${stats.progress}% (${stats.owned}/${stats.total}).`;
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: "Mi Album Mundialista 2026",
+        text,
+        url
+      });
+      trackMobileInstallAction({ important: true });
+      return;
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+    }
+  }
+  await copyText(url);
 }
 
 function downloadText(filename, content, type = "text/plain;charset=utf-8") {
@@ -2154,15 +2249,17 @@ function openAccountLogin() {
 
 function renderLanding() {
   const showDownload = isMobileOrTablet() && !isStandaloneApp();
+  const publicShare = parsePublicSharePayload();
   const app = document.getElementById("app");
   app.innerHTML = `
     <main class="landing-screen" style="--landing-bg:url('${LANDING_BG}')">
       <section class="landing-card" aria-label="Mi Album Mundialista 2026">
         <img class="landing-logo" src="${BRAND_LOGO_FULL}" alt="Mi Album Mundialista 2026" />
+        ${publicShare ? renderPublicLandingCard(publicShare) : ""}
         <div class="landing-actions">
           <button class="button landing-primary" id="enterApp" type="button">
             ${renderIcon("log-in")}
-            <span>Entrar local</span>
+            <span>${publicShare ? "Crear mi control" : "Entrar local"}</span>
           </button>
           <button class="button secondary google-button" id="landingGoogleLogin" type="button">
             <span>Google</span>
@@ -2182,6 +2279,26 @@ function renderLanding() {
         </div>
       </section>
     </main>
+  `;
+}
+
+function renderPublicLandingCard(publicShare) {
+  const progress = `${publicShare.progress}%`;
+  const location = publicShare.city ? ` - ${escapeHtml(publicShare.city)}` : "";
+  return `
+    <article class="landing-public-card" style="--public-progress:${publicShare.progress}%">
+      <span class="landing-public-kicker">Resumen compartido</span>
+      <strong>${escapeHtml(publicShare.name)}${location}</strong>
+      <div class="landing-public-progress">
+        <span>${progress}</span>
+        <div><i></i></div>
+      </div>
+      <div class="landing-public-stats">
+        <span><b>${publicShare.owned}</b> pegadas</span>
+        <span><b>${publicShare.missing}</b> faltantes</span>
+        <span><b>${publicShare.duplicates}</b> repetidas</span>
+      </div>
+    </article>
   `;
 }
 
@@ -3164,6 +3281,7 @@ function renderShare() {
   const stats = getStats();
   const compare = compareFriendList();
   const publicText = buildPublicSummaryText();
+  const publicUrl = buildPublicShareUrl();
   return `
     ${pageHeader("Compartir", "Genera resumen publico, comparte progreso y compara listas con amigos.")}
     <section class="grid stats-grid">
@@ -3176,10 +3294,16 @@ function renderShare() {
       <section class="panel share-card">
         <h3 class="panel-title">Vista publica copiable</h3>
         <p class="page-copy">Resumen de solo lectura para enviar por WhatsApp o pegar en un grupo.</p>
+        <label class="share-link-box">
+          <span>Enlace publico</span>
+          <input class="field" value="${escapeHtml(publicUrl)}" readonly />
+        </label>
         <textarea class="textarea share-text" readonly>${escapeHtml(publicText)}</textarea>
         <div class="toolbar">
+          <button class="button secondary" data-copy-public-link type="button">Copiar enlace</button>
           <button class="button" data-copy-public type="button">Copiar resumen</button>
           <button class="button secondary" data-whatsapp-public type="button">Enviar por WhatsApp</button>
+          <button class="button secondary" data-native-share-public type="button">Compartir</button>
         </div>
       </section>
       <section class="panel compare-panel">
@@ -3789,8 +3913,16 @@ function bindEvents() {
     button.addEventListener("click", () => copyText(buildPublicSummaryText()));
   });
 
+  document.querySelectorAll("[data-copy-public-link]").forEach((button) => {
+    button.addEventListener("click", () => copyText(buildPublicShareUrl()));
+  });
+
   document.querySelectorAll("[data-whatsapp-public]").forEach((button) => {
     button.addEventListener("click", () => openWhatsApp(buildPublicSummaryText()));
+  });
+
+  document.querySelectorAll("[data-native-share-public]").forEach((button) => {
+    button.addEventListener("click", sharePublicLink);
   });
 
   const exportButton = document.getElementById("exportBackup");
@@ -3922,7 +4054,18 @@ function render() {
 async function initialize() {
   registerServiceWorker();
   state.data = await loadInitialData();
+  applyInitialRoute();
   render();
+}
+
+function applyInitialRoute() {
+  const params = new URLSearchParams(window.location.search || "");
+  const shortcut = params.get("shortcut");
+  const validShortcuts = new Set(["register", "missing", "duplicates", "share", "stats"]);
+  if (validShortcuts.has(shortcut)) {
+    state.entered = true;
+    state.view = shortcut;
+  }
 }
 
 initialize();

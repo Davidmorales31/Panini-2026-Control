@@ -61,6 +61,17 @@ Entregables:
 - Comparacion con amigos.
 - Notificaciones.
 
+## Fase 11 - Crecimiento Organico
+
+Objetivo: que cada lista compartida traiga nuevos usuarios sin pauta paga.
+
+Entregables:
+- Meta tags SEO y tarjetas sociales.
+- Enlace publico con resumen de progreso.
+- CTA para crear control propio desde enlaces compartidos.
+- Copiar enlace y compartir nativo desde el modulo Compartir.
+- Shortcuts PWA hacia Registrar y Faltantes.
+
 ## Decision Tecnica Recomendada
 
 Para empezar rapido y bonito:

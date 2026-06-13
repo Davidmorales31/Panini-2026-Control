@@ -1304,6 +1304,81 @@ button {
   padding-inline: 22px;
 }
 
+.landing-public-card {
+  display: grid;
+  width: min(440px, 94vw);
+  gap: 10px;
+  border: 1px solid rgba(8, 32, 74, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 16px;
+  box-shadow: 0 18px 42px rgba(8, 32, 74, 0.12);
+  backdrop-filter: blur(14px);
+}
+
+.landing-public-kicker {
+  color: #1457b8;
+  font-size: 0.74rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.landing-public-card > strong {
+  color: #08204a;
+  font-size: 1.08rem;
+  font-weight: 950;
+}
+
+.landing-public-progress {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.landing-public-progress span {
+  color: #08204a;
+  font-size: 1.8rem;
+  font-weight: 950;
+}
+
+.landing-public-progress div {
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: #dbe4ef;
+}
+
+.landing-public-progress i {
+  display: block;
+  width: var(--public-progress);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffd800, #18a957, #1457b8);
+}
+
+.landing-public-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.landing-public-stats span {
+  border-radius: 10px;
+  background: #f1f5fb;
+  color: #52627d;
+  padding: 8px;
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.landing-public-stats b {
+  display: block;
+  color: #08204a;
+  font-size: 1rem;
+  font-weight: 950;
+}
+
 .landing-primary {
   border-color: #08204a;
   background: #ffd800;
@@ -2638,6 +2713,20 @@ body {
 .compare-panel {
   display: grid;
   gap: 12px;
+}
+
+.share-link-box {
+  display: grid;
+  gap: 6px;
+  color: #667085;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.share-link-box input {
+  overflow: hidden;
+  color: #08204a;
+  text-overflow: ellipsis;
 }
 
 .share-text {
