@@ -1,12 +1,12 @@
-const CACHE_NAME = "album-mundialista-2026-viral-v12";
+const CACHE_NAME = "album-mundialista-2026-clean-settings-v13";
 const APP_SHELL = [
   "./",
   "index.html",
-  "manifest.json?v=42",
-  "styles.css?v=42",
-  "app.js?v=42",
+  "manifest.json?v=43",
+  "styles.css?v=43",
+  "app.js?v=43",
   "data/catalog-world-cup-2026.json?v=2",
-  "assets/app-icon.png?v=42",
+  "assets/app-icon.png?v=43",
   "assets/brand-logo-full.png?v=1",
   "assets/brand-logo-mark.png?v=1",
   "assets/landing-bg.png?v=1"

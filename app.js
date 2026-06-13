@@ -2250,7 +2250,7 @@ async function installApp() {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   const register = () => {
-    navigator.serviceWorker.register("sw.js?v=7").catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=8").catch(() => {});
   };
   if (document.readyState === "complete") {
     register();
@@ -2526,7 +2526,7 @@ function renderImportModal() {
         </label>
         <div class="toolbar scanner-toolbar">
           <button class="button secondary" data-clean-import type="button">${renderIcon("check-square")} Limpiar lectura</button>
-          <span class="scanner-note">Fase 9: confirma siempre antes de guardar.</span>
+          <span class="scanner-note">Revisa siempre los codigos antes de guardar.</span>
         </div>
         ${renderImportQuality()}
         <div class="import-preview-list">
@@ -3409,13 +3409,15 @@ function renderSettings() {
   const goals = normalizeGoals(state.data.goals);
   const cloudAccount = normalizeCloudAccount(state.data.cloudAccount);
   const insights = getSmartInsights();
+  const accountLabel = cloudAccount.userName || cloudAccount.email || "Sin cuenta conectada";
+  const syncLabel = cloudAccount.lastSyncAt ? new Date(cloudAccount.lastSyncAt).toLocaleString() : "Aun sin sincronizar";
   return `
-    ${pageHeader(t("settings"), "Respalda datos, ajusta visualizacion, idioma y preferencias generales.")}
+    ${pageHeader(t("settings"), "Personaliza tu album, conecta tu cuenta y protege tu progreso.")}
     <section class="grid stats-grid">
-      ${statCard("Total checklist", stats.total, "Catalogo real")}
-      ${statCard("Guardado", "Local", "Este navegador")}
-      ${statCard("PWA", "Lista", "Instalable")}
-      ${statCard("Version", "MVP", "Primera base")}
+      ${statCard("Album", `${stats.owned}/${stats.total}`, "Fichas conseguidas")}
+      ${statCard("Cuenta", cloudAccount.token ? "Conectada" : "Local", accountLabel)}
+      ${statCard("Ultima copia", syncLabel === "Aun sin sincronizar" ? "Pendiente" : "Lista", syncLabel)}
+      ${statCard("Progreso", `${stats.progress}%`, `${stats.missing} faltantes`)}
     </section>
     <section class="panel settings-panel" style="margin-top:16px">
       <h3 class="panel-title">Preferencias</h3>
@@ -3439,8 +3441,8 @@ function renderSettings() {
     <section class="panel" style="margin-top:16px">
       <div class="section-title-row">
         <div>
-          <h3 class="panel-title">Fase 8: metas y alertas</h3>
-          <p class="page-copy">Define objetivos y deja que el Inicio te sugiera el siguiente paso.</p>
+          <h3 class="panel-title">Metas del album</h3>
+          <p class="page-copy">Define objetivos personales para que el inicio te sugiera que revisar primero.</p>
         </div>
       </div>
       <div class="settings-grid sync-grid">
@@ -3478,123 +3480,8 @@ function renderSettings() {
     <section class="panel" style="margin-top:16px">
       <div class="section-title-row">
         <div>
-          <h3 class="panel-title">Fase 9: escaner asistido</h3>
-          <p class="page-copy">Foto/camara con limpieza de lectura, revision obligatoria y resumen de confianza.</p>
-        </div>
-        <div class="toolbar">
-          <button class="button secondary" data-nav="register" type="button">${renderIcon("camera")} Abrir registro</button>
-        </div>
-      </div>
-      <div class="settings-grid phase-grid">
-        <article class="phase-card">
-          <strong>Camara/foto</strong>
-          <span>Activa</span>
-          <p>Permite capturar imagen, detectar codigos de barra si el navegador lo soporta y confirmar manualmente.</p>
-        </article>
-        <article class="phase-card">
-          <strong>Limpieza OCR</strong>
-          <span>Activa</span>
-          <p>Normaliza separadores, espacios y lecturas comunes antes de analizar codigos.</p>
-        </article>
-        <article class="phase-card">
-          <strong>Control de confianza</strong>
-          <span>Activa</span>
-          <p>Muestra porcentaje, nuevas, ya tenidas y no reconocidas antes de guardar.</p>
-        </article>
-        <article class="phase-card">
-          <strong>Revision segura</strong>
-          <span>Obligatoria</span>
-          <p>No guarda nada hasta que confirmes la vista previa.</p>
-        </article>
-      </div>
-    </section>
-    <section class="panel" style="margin-top:16px">
-      <h3 class="panel-title">Datos</h3>
-      <div class="toolbar">
-        <button class="button" id="exportBackup" type="button">Exportar backup</button>
-        <label class="button secondary" for="importBackup">Importar backup</label>
-        <input id="importBackup" type="file" accept="application/json" hidden />
-        <button class="button secondary" id="exportCollectionCsv" type="button">CSV coleccion</button>
-        <label class="button secondary" for="importCollectionCsv">Importar CSV</label>
-        <input id="importCollectionCsv" type="file" accept=".csv,text/csv" hidden />
-        <button class="button warn" id="resetDemo" type="button">Reiniciar demo</button>
-      </div>
-    </section>
-    <section class="panel" style="margin-top:16px">
-      <div class="section-title-row">
-        <div>
-          <h3 class="panel-title">Fase 5: portabilidad</h3>
-          <p class="page-copy">Exporta datos para Excel o Google Sheets y conserva un historial amplio de actividad.</p>
-        </div>
-        <div class="toolbar">
-          <button class="button secondary" id="exportExpensesCsv" type="button">CSV gastos</button>
-          <button class="button secondary" id="exportTradesCsv" type="button">CSV intercambios</button>
-          <button class="button secondary" id="exportActivityCsv" type="button">CSV historial</button>
-        </div>
-      </div>
-      <div class="settings-grid phase-grid">
-        <article class="phase-card">
-          <strong>Coleccion</strong>
-          <span>${stats.owned}/${stats.total} fichas unicas</span>
-          <p>Archivo con codigo, seccion, cantidad, pegada, prioridad y reservadas.</p>
-        </article>
-        <article class="phase-card">
-          <strong>Gastos</strong>
-          <span>${state.data.expenses?.length || 0} registros</span>
-          <p>Compras, sobres, cajas, laminas sueltas y notas de compra.</p>
-        </article>
-        <article class="phase-card">
-          <strong>Intercambios</strong>
-          <span>${state.data.trades?.length || 0} movimientos</span>
-          <p>Contactos, entregas, recibidos, estado y observaciones.</p>
-        </article>
-        <article class="phase-card">
-          <strong>Historial</strong>
-          <span>${state.data.activity?.length || 0} eventos</span>
-          <p>Ultimas acciones guardadas localmente para auditoria personal.</p>
-        </article>
-      </div>
-    </section>
-    <section class="panel" style="margin-top:16px">
-      <div class="section-title-row">
-        <div>
-          <h3 class="panel-title">Fase 6: app instalable</h3>
-          <p class="page-copy">Base PWA lista para instalar en moviles compatibles y abrir la app aun con conexion inestable.</p>
-        </div>
-      </div>
-      <div class="settings-grid phase-grid">
-        <article class="phase-card">
-          <strong>Instalacion movil</strong>
-          <span>Activa</span>
-          <p>El boton Descargar de la portada usa el instalador del navegador cuando esta disponible.</p>
-        </article>
-        <article class="phase-card">
-          <strong>Modo offline</strong>
-          <span>Base cacheada</span>
-          <p>La interfaz, logos, estilos y catalogo quedan preparados para carga local tras una primera visita.</p>
-        </article>
-        <article class="phase-card">
-          <strong>Datos locales</strong>
-          <span>Protegidos</span>
-          <p>La coleccion sigue guardada en este navegador, separada del cache de instalacion.</p>
-        </article>
-        <article class="phase-card">
-          <strong>PWA instalada</strong>
-          <span>Ruta actual</span>
-          <p>La publicacion se mantiene como app web instalable desde el navegador.</p>
-        </article>
-      </div>
-    </section>
-    <section class="panel" style="margin-top:16px">
-      <div class="section-title-row">
-        <div>
-          <h3 class="panel-title">Fase 7: perfil y sincronizacion</h3>
-          <p class="page-copy">Prepara tu coleccion para moverla entre celular y PC, y para conectar nube despues.</p>
-        </div>
-        <div class="toolbar">
-          <button class="button secondary" id="exportSyncPackage" type="button">${renderIcon("cloud")} Exportar paquete</button>
-          <label class="button secondary" for="importSyncPackage">${renderIcon("download")} Importar paquete</label>
-          <input id="importSyncPackage" type="file" accept="application/json" hidden />
+          <h3 class="panel-title">Mi perfil</h3>
+          <p class="page-copy">Estos datos se usan para tus enlaces compartidos y para reconocer tus copias de seguridad.</p>
         </div>
       </div>
       <div class="settings-grid sync-grid">
@@ -3619,12 +3506,12 @@ function renderSettings() {
         <article class="phase-card">
           <strong>${renderIcon("user")} Coleccionista</strong>
           <span>${escapeHtml(profile.alias || profile.collectorName || "Sin perfil")}</span>
-          <p>Este perfil viaja dentro del paquete de sincronizacion.</p>
+          <p>Este nombre puede aparecer en tus resúmenes públicos.</p>
         </article>
         <article class="phase-card">
-          <strong>${renderIcon("cloud")} ID sincronizacion</strong>
+          <strong>${renderIcon("cloud")} Copias y cuenta</strong>
           <span>${escapeHtml(profile.syncId)}</span>
-          <p>Identificador local para enlazar esta coleccion con una futura cuenta en nube.</p>
+          <p>Identificador privado para reconocer tu colección al respaldarla.</p>
         </article>
       </div>
       <div class="toolbar" style="margin-top:14px">
@@ -3634,15 +3521,11 @@ function renderSettings() {
     <section class="panel" style="margin-top:16px">
       <div class="section-title-row">
         <div>
-          <h3 class="panel-title">Fase 10: API propia y nube</h3>
-          <p class="page-copy">Sin login guarda local en este dispositivo. Con cuenta propia o Google sincroniza PC/celular en Cloudflare.</p>
+          <h3 class="panel-title">Cuenta y sincronización</h3>
+          <p class="page-copy">Conecta Google o una cuenta propia para mantener tu progreso entre celular y PC. Sin cuenta, todo queda guardado en este dispositivo.</p>
         </div>
       </div>
       <div class="settings-grid sync-grid">
-        <label>
-          <span>URL API propia</span>
-          <input class="input" id="apiBaseUrl" value="${escapeHtml(cloudAccount.apiBaseUrl)}" placeholder="http://127.0.0.1:8787" />
-        </label>
         <label>
           <span>Email de cuenta</span>
           <input class="input" id="cloudEmail" type="email" value="${escapeHtml(cloudAccount.email)}" placeholder="correo@ejemplo.com" />
@@ -3651,48 +3534,79 @@ function renderSettings() {
           <span>Clave</span>
           <input class="input" id="cloudPassword" type="password" placeholder="Minimo 6 caracteres" />
         </label>
-        <label>
-          <span>Proveedor</span>
-          <select class="select" id="cloudProvider">
-            <option value="api-propia" ${cloudAccount.provider === "api-propia" ? "selected" : ""}>API local</option>
-            <option value="cloudflare" ${cloudAccount.provider === "cloudflare" ? "selected" : ""}>Cloudflare gratis</option>
-            <option value="google" ${cloudAccount.provider === "google" ? "selected" : ""}>Google</option>
-            <option value="supabase" ${cloudAccount.provider === "supabase" ? "selected" : ""}>Supabase alternativa</option>
-            <option value="firebase" ${cloudAccount.provider === "firebase" ? "selected" : ""}>Firebase futuro</option>
-          </select>
-        </label>
       </div>
       <div class="sync-summary">
         <article class="phase-card">
-          <strong>${renderIcon("cloud")} Estado nube</strong>
-          <span>${escapeHtml(cloudAccount.status)}</span>
+          <strong>${renderIcon("cloud")} Estado de cuenta</strong>
+          <span>${cloudAccount.token ? "Conectada" : "Sin conectar"}</span>
           <p>${cloudAccount.userName ? `Sesion: ${escapeHtml(cloudAccount.userName)}` : "Sin sesion activa. Tus datos siguen guardados localmente."}</p>
         </article>
         <article class="phase-card">
-          <strong>${renderIcon("check-square")} Ultimo punto</strong>
-          <span>${cloudAccount.lastSyncAt ? new Date(cloudAccount.lastSyncAt).toLocaleString() : "Sin marcar"}</span>
-          <p>Se actualiza al subir o bajar coleccion desde la API propia.</p>
+          <strong>${renderIcon("check-square")} Ultima sincronización</strong>
+          <span>${syncLabel}</span>
+          <p>Cuando conectas una cuenta, la app sube y baja tu progreso para usarlo en otros dispositivos.</p>
         </article>
       </div>
       <div class="toolbar" style="margin-top:14px">
-        <button class="button" id="saveCloudAccount" type="button">Guardar cuenta</button>
-        <button class="button secondary" id="checkApiConnection" type="button">Probar API</button>
         <button class="button secondary google-button" id="loginGoogleUser" type="button">Google</button>
         <button class="button secondary" id="registerCloudUser" type="button">Crear cuenta</button>
         <button class="button secondary" id="loginCloudUser" type="button">Iniciar sesion</button>
-        <button class="button secondary" id="uploadCloudData" type="button">Subir coleccion</button>
-        <button class="button secondary" id="downloadCloudData" type="button">Bajar coleccion</button>
-        <button class="button secondary" id="markCloudSync" type="button">Marcar punto sync</button>
+        <button class="button secondary" id="uploadCloudData" type="button">Guardar en la nube</button>
+        <button class="button secondary" id="downloadCloudData" type="button">Traer de la nube</button>
       </div>
       <p class="sync-note">Tu avance siempre tiene respaldo local. La nube se usa solo cuando conectas una cuenta.</p>
+    </section>
+    <section class="panel" style="margin-top:16px">
+      <div class="section-title-row">
+        <div>
+          <h3 class="panel-title">Respaldo y archivos</h3>
+          <p class="page-copy">Exporta una copia de seguridad o descarga archivos para revisar tu colección fuera de la app.</p>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="button" id="exportBackup" type="button">Exportar copia</button>
+        <label class="button secondary" for="importBackup">Importar copia</label>
+        <input id="importBackup" type="file" accept="application/json" hidden />
+        <button class="button secondary" id="exportCollectionCsv" type="button">Descargar colección</button>
+        <label class="button secondary" for="importCollectionCsv">Importar colección</label>
+        <input id="importCollectionCsv" type="file" accept=".csv,text/csv" hidden />
+        <button class="button secondary" id="exportExpensesCsv" type="button">Descargar gastos</button>
+        <button class="button secondary" id="exportTradesCsv" type="button">Descargar intercambios</button>
+        <button class="button secondary" id="exportActivityCsv" type="button">Descargar historial</button>
+      </div>
+      <div class="settings-grid phase-grid" style="margin-top:14px">
+        <article class="phase-card">
+          <strong>Colección</strong>
+          <span>${stats.owned}/${stats.total} fichas</span>
+          <p>Cantidades, pegadas, prioridades y repetidas.</p>
+        </article>
+        <article class="phase-card">
+          <strong>Gastos</strong>
+          <span>${state.data.expenses?.length || 0} registros</span>
+          <p>Compras, sobres, cajas y notas guardadas.</p>
+        </article>
+        <article class="phase-card">
+          <strong>Intercambios</strong>
+          <span>${state.data.trades?.length || 0} movimientos</span>
+          <p>Contactos, fichas ofrecidas, recibidas y estados.</p>
+        </article>
+        <article class="phase-card">
+          <strong>Historial</strong>
+          <span>${state.data.activity?.length || 0} eventos</span>
+          <p>Ultimas acciones de tu colección.</p>
+        </article>
+      </div>
     </section>
     <section class="panel" style="margin-top:16px">
       <h3 class="panel-title">Historial reciente</h3>
       ${renderActivity(30)}
     </section>
     <section class="panel" style="margin-top:16px">
-      <h3 class="panel-title">Siguiente mejora sugerida</h3>
-      <p class="page-copy">Catalogo cargado con ${state.data.stickers.length} cromos, incluyendo la seccion bonus Coca-Cola. Datos comerciales verificados contra Panini/Coca-Cola; listado base importado desde Scanini como referencia independiente.</p>
+      <h3 class="panel-title">Zona de cuidado</h3>
+      <p class="page-copy">Usa esta opción solo si quieres borrar el progreso guardado en este navegador y volver a empezar.</p>
+      <div class="toolbar" style="margin-top:12px">
+        <button class="button warn" id="resetDemo" type="button">Reiniciar mi colección</button>
+      </div>
     </section>
   `;
 }
