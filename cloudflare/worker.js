@@ -99,6 +99,39 @@ function publicUser(user) {
   };
 }
 
+function sanitizePublicShareData(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const total = Number(data.total || 0);
+  if (!Number.isFinite(total) || total <= 0) return null;
+  const trim = (value, fallback = "") => String(value || fallback).replace(/\s+/g, " ").trim().slice(0, 60);
+  const codes = (value) => (Array.isArray(value) ? value.map((code) => trim(code).toUpperCase()).filter(Boolean).slice(0, 360) : []);
+  return {
+    v: 2,
+    name: trim(data.name, "Coleccionista mundialista"),
+    city: trim(data.city),
+    progress: Math.max(0, Math.min(100, Number(data.progress || 0))),
+    owned: Math.max(0, Number(data.owned || 0)),
+    total: Math.max(0, total),
+    missing: Math.max(0, Number(data.missing || 0)),
+    duplicates: Math.max(0, Number(data.duplicates || 0)),
+    priority: Math.max(0, Number(data.priority || 0)),
+    m: codes(data.m),
+    d: codes(data.d),
+    capped: Boolean(data.capped),
+    at: trim(data.at)
+  };
+}
+
+async function ensurePublicSharesTable(env) {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS public_shares (
+      id TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`
+  ).run();
+}
+
 async function createSession(env, userId) {
   const token = randomHex(32);
   await env.DB.prepare(
@@ -151,6 +184,32 @@ async function handleRequest(request, env) {
       return send({
         googleClientId: env.GOOGLE_CLIENT_ID || ""
       }, 200, origin);
+    }
+
+    if (request.method === "POST" && url.pathname === "/public/share") {
+      if (!env.DB) return send({ error: "DB_MISSING", message: "Base de datos no configurada." }, 500, origin);
+      const body = await readBody(request);
+      const data = sanitizePublicShareData(body.data);
+      if (!data) return send({ error: "INVALID_SHARE", message: "El resumen publico no es valido." }, 400, origin);
+      await ensurePublicSharesTable(env);
+      const id = randomHex(5);
+      const createdAt = now();
+      await env.DB.prepare("INSERT INTO public_shares (id, data, created_at) VALUES (?, ?, ?)")
+        .bind(id, JSON.stringify(data), createdAt)
+        .run();
+      return send({ id, url: `${url.origin}/?share=${id}`, createdAt }, 201, origin);
+    }
+
+    if (request.method === "GET" && url.pathname.startsWith("/public/share/")) {
+      if (!env.DB) return send({ error: "DB_MISSING", message: "Base de datos no configurada." }, 500, origin);
+      const id = url.pathname.split("/").pop() || "";
+      if (!/^[a-f0-9]{8,24}$/i.test(id)) {
+        return send({ error: "INVALID_SHARE", message: "Enlace publico invalido." }, 400, origin);
+      }
+      await ensurePublicSharesTable(env);
+      const row = await env.DB.prepare("SELECT * FROM public_shares WHERE id = ?").bind(id.toLowerCase()).first();
+      if (!row) return send({ error: "NOT_FOUND", message: "Enlace publico no encontrado." }, 404, origin);
+      return send({ id: row.id, data: JSON.parse(row.data), createdAt: row.created_at }, 200, origin);
     }
 
     if (request.method === "POST" && url.pathname === "/auth/register") {

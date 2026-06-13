@@ -46,9 +46,14 @@ function verifyPassword(password, storedHash) {
 async function ensureDb() {
   await mkdir(dirname(DB_PATH), { recursive: true });
   try {
-    return JSON.parse(await readFile(DB_PATH, "utf8"));
+    const db = JSON.parse(await readFile(DB_PATH, "utf8"));
+    db.users = db.users || [];
+    db.sessions = db.sessions || [];
+    db.albums = db.albums || {};
+    db.publicShares = db.publicShares || {};
+    return db;
   } catch (error) {
-    return { users: [], sessions: [], albums: {} };
+    return { users: [], sessions: [], albums: {}, publicShares: {} };
   }
 }
 
@@ -87,6 +92,29 @@ function publicUser(user) {
     name: user.name,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt
+  };
+}
+
+function sanitizePublicShareData(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const total = Number(data.total || 0);
+  if (!Number.isFinite(total) || total <= 0) return null;
+  const trim = (value, fallback = "") => String(value || fallback).replace(/\s+/g, " ").trim().slice(0, 60);
+  const codes = (value) => (Array.isArray(value) ? value.map((code) => trim(code).toUpperCase()).filter(Boolean).slice(0, 360) : []);
+  return {
+    v: 2,
+    name: trim(data.name, "Coleccionista mundialista"),
+    city: trim(data.city),
+    progress: Math.max(0, Math.min(100, Number(data.progress || 0))),
+    owned: Math.max(0, Number(data.owned || 0)),
+    total: Math.max(0, total),
+    missing: Math.max(0, Number(data.missing || 0)),
+    duplicates: Math.max(0, Number(data.duplicates || 0)),
+    priority: Math.max(0, Number(data.priority || 0)),
+    m: codes(data.m),
+    d: codes(data.d),
+    capped: Boolean(data.capped),
+    at: trim(data.at)
   };
 }
 
@@ -134,6 +162,36 @@ async function handleRequest(request, response) {
 
     if (request.method === "GET" && url.pathname === "/auth/config") {
       send(response, 200, { googleClientId: process.env.GOOGLE_CLIENT_ID || "" });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/public/share") {
+      const body = await readBody(request);
+      const data = sanitizePublicShareData(body.data);
+      if (!data) {
+        send(response, 400, { error: "INVALID_SHARE", message: "El resumen publico no es valido." });
+        return;
+      }
+      const id = randomBytes(5).toString("hex");
+      const createdAt = now();
+      db.publicShares[id] = { data, createdAt };
+      await saveDb(db);
+      send(response, 201, { id, url: `${url.origin}/?share=${id}`, createdAt });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname.startsWith("/public/share/")) {
+      const id = url.pathname.split("/").pop() || "";
+      if (!/^[a-f0-9]{8,24}$/i.test(id)) {
+        send(response, 400, { error: "INVALID_SHARE", message: "Enlace publico invalido." });
+        return;
+      }
+      const share = db.publicShares[id.toLowerCase()];
+      if (!share) {
+        send(response, 404, { error: "NOT_FOUND", message: "Enlace publico no encontrado." });
+        return;
+      }
+      send(response, 200, { id: id.toLowerCase(), data: share.data, createdAt: share.createdAt });
       return;
     }
 

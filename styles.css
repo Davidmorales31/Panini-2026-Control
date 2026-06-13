@@ -1379,6 +1379,18 @@ button {
   font-weight: 950;
 }
 
+.landing-public-error {
+  width: min(440px, 94vw);
+  margin: 0;
+  border: 1px solid rgba(227, 6, 19, 0.2);
+  border-radius: 14px;
+  background: rgba(255, 245, 246, 0.9);
+  color: #9e0d18;
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
 .public-compare {
   display: grid;
   gap: 10px;

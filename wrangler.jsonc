@@ -16,7 +16,8 @@
       "/health",
       "/auth/*",
       "/me",
-      "/sync/*"
+      "/sync/*",
+      "/public/*"
     ],
     "not_found_handling": "single-page-application"
   },

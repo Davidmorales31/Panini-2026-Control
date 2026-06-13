@@ -252,6 +252,8 @@ const state = {
   },
   compareText: "",
   publicCompareText: "",
+  publicShare: null,
+  publicShareError: "",
   activeModal: null,
   teamRegisterSectionId: null,
   teamRegisterSelectedIds: new Set(),
@@ -981,12 +983,13 @@ function shortPublicText(value, fallback = "") {
     .slice(0, 48);
 }
 
-function buildPublicSharePayload() {
+function buildPublicSharePayload({ includeCodes = true } = {}) {
   const stats = getStats();
   const profile = normalizeProfile(state.data.profile);
   const maxCodes = 320;
-  const missingCodes = missingStickers().slice(0, maxCodes).map((sticker) => sticker.code);
-  const duplicateCodes = duplicateStickers().slice(0, maxCodes).map((sticker) => sticker.code);
+  const duplicates = duplicateStickers();
+  const missingCodes = includeCodes ? missingStickers().slice(0, maxCodes).map((sticker) => sticker.code) : [];
+  const duplicateCodes = includeCodes ? duplicates.slice(0, maxCodes).map((sticker) => sticker.code) : [];
   return {
     v: 2,
     name: shortPublicText(profile.alias || profile.collectorName, "Coleccionista mundialista"),
@@ -999,39 +1002,74 @@ function buildPublicSharePayload() {
     priority: stats.priority,
     m: missingCodes,
     d: duplicateCodes,
-    capped: missingCodes.length < stats.missing || duplicateCodes.length < duplicateStickers().length,
+    capped: !includeCodes || missingCodes.length < stats.missing || duplicateCodes.length < duplicates.length,
     at: new Date().toISOString().slice(0, 10)
   };
 }
 
-function buildPublicShareUrl() {
-  const payload = encodeURIComponent(JSON.stringify(buildPublicSharePayload()));
+function buildLegacyPublicShareUrl({ includeCodes = false } = {}) {
+  const payload = encodeURIComponent(JSON.stringify(buildPublicSharePayload({ includeCodes })));
   return `${getPublicAppUrl()}?source=share&public=${payload}`;
 }
 
-function parsePublicSharePayload() {
+async function createPublicShareUrl() {
+  const data = buildPublicSharePayload();
+  try {
+    const payload = await apiRequest("/public/share", {
+      method: "POST",
+      body: JSON.stringify({ data })
+    });
+    if (payload.id) return `${getPublicAppUrl()}?share=${encodeURIComponent(payload.id)}`;
+  } catch (error) {
+    return buildLegacyPublicShareUrl({ includeCodes: false });
+  }
+  return buildLegacyPublicShareUrl({ includeCodes: false });
+}
+
+function normalizePublicSharePayload(payload) {
+  if (!payload || Number(payload.total) <= 0) return null;
+  return {
+    name: shortPublicText(payload.name, "Coleccionista mundialista"),
+    city: shortPublicText(payload.city),
+    progress: Math.max(0, Math.min(100, Number(payload.progress || 0))),
+    owned: Math.max(0, Number(payload.owned || 0)),
+    total: Math.max(0, Number(payload.total || 0)),
+    missing: Math.max(0, Number(payload.missing || 0)),
+    duplicates: Math.max(0, Number(payload.duplicates || 0)),
+    priority: Math.max(0, Number(payload.priority || 0)),
+    missingCodes: Array.isArray(payload.m) ? payload.m.map(normalizeCode).filter(Boolean).slice(0, 360) : [],
+    duplicateCodes: Array.isArray(payload.d) ? payload.d.map(normalizeCode).filter(Boolean).slice(0, 360) : [],
+    capped: Boolean(payload.capped),
+    at: shortPublicText(payload.at)
+  };
+}
+
+function parseLegacyPublicSharePayload() {
   try {
     const params = new URLSearchParams(window.location.search || "");
     const raw = params.get("public");
     if (!raw) return null;
     const payload = JSON.parse(raw.trim().startsWith("{") ? raw : decodeURIComponent(raw));
-    if (!payload || Number(payload.total) <= 0) return null;
-    return {
-      name: shortPublicText(payload.name, "Coleccionista mundialista"),
-      city: shortPublicText(payload.city),
-      progress: Math.max(0, Math.min(100, Number(payload.progress || 0))),
-      owned: Math.max(0, Number(payload.owned || 0)),
-      total: Math.max(0, Number(payload.total || 0)),
-      missing: Math.max(0, Number(payload.missing || 0)),
-      duplicates: Math.max(0, Number(payload.duplicates || 0)),
-      priority: Math.max(0, Number(payload.priority || 0)),
-      missingCodes: Array.isArray(payload.m) ? payload.m.map(normalizeCode).filter(Boolean).slice(0, 360) : [],
-      duplicateCodes: Array.isArray(payload.d) ? payload.d.map(normalizeCode).filter(Boolean).slice(0, 360) : [],
-      capped: Boolean(payload.capped),
-      at: shortPublicText(payload.at)
-    };
+    return normalizePublicSharePayload(payload);
   } catch (error) {
     return null;
+  }
+}
+
+async function loadPublicShareFromUrl() {
+  const params = new URLSearchParams(window.location.search || "");
+  const shareId = params.get("share");
+  if (!shareId) {
+    state.publicShare = parseLegacyPublicSharePayload();
+    return;
+  }
+  try {
+    const payload = await apiRequest(`/public/share/${encodeURIComponent(shareId)}`);
+    state.publicShare = normalizePublicSharePayload(payload.data);
+    state.publicShareError = state.publicShare ? "" : "El enlace publico no trae un resumen valido.";
+  } catch (error) {
+    state.publicShare = null;
+    state.publicShareError = error.message || "No pude cargar el enlace publico.";
   }
 }
 
@@ -1049,8 +1087,7 @@ function comparePublicShareList(publicShare, text = state.publicCompareText) {
   };
 }
 
-function buildPublicSummaryText() {
-  const publicUrl = buildPublicShareUrl();
+function buildPublicSummaryText(publicUrl = getPublicAppUrl()) {
   return [
     buildProgressText(),
     "",
@@ -1473,7 +1510,7 @@ function copyTradeMessage(tradeId) {
   copyText(buildTradeMessage(trade));
 }
 
-function buildShareText(type, useCurrentFilters = false, includePublicLink = true) {
+function buildShareText(type, useCurrentFilters = false, includePublicLink = true, publicUrl = getPublicAppUrl()) {
   const base = type === "missing" ? missingStickers() : duplicateStickers();
   const stickers = useCurrentFilters ? filterListStickers(base) : base;
   const isMissing = type === "missing";
@@ -1483,7 +1520,7 @@ function buildShareText(type, useCurrentFilters = false, includePublicLink = tru
     : stickers.reduce((sum, sticker) => sum + Math.max(0, getInventory(sticker.id).quantity - 1), 0);
   if (!stickers.length) {
     const emptyLines = [`${title} - Mi Album Mundialista 2026`, "", `No tengo ${isMissing ? "faltantes" : "repetidas"} por ahora.`];
-    if (includePublicLink) emptyLines.push("", "Mira mi control del album:", buildPublicShareUrl());
+    if (includePublicLink) emptyLines.push("", "Mira mi control del album:", publicUrl);
     return emptyLines.join("\n");
   }
 
@@ -1509,7 +1546,7 @@ function buildShareText(type, useCurrentFilters = false, includePublicLink = tru
   if (includePublicLink) {
     lines.push("");
     lines.push("Mira mi control del album:");
-    lines.push(buildPublicShareUrl());
+    lines.push(publicUrl);
   }
   return lines.join("\n");
 }
@@ -1536,7 +1573,7 @@ function openWhatsApp(text) {
 }
 
 async function sharePublicLink() {
-  const url = buildPublicShareUrl();
+  const url = await createPublicShareUrl();
   const stats = getStats();
   const text = `Mi Album Mundialista 2026 va en ${stats.progress}% (${stats.owned}/${stats.total}).`;
   if (navigator.share) {
@@ -2250,7 +2287,7 @@ async function installApp() {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   const register = () => {
-    navigator.serviceWorker.register("sw.js?v=8").catch(() => {});
+    navigator.serviceWorker.register("sw.js?v=9").catch(() => {});
   };
   if (document.readyState === "complete") {
     register();
@@ -2273,13 +2310,14 @@ function openAccountLogin() {
 
 function renderLanding() {
   const showDownload = isMobileOrTablet() && !isStandaloneApp();
-  const publicShare = parsePublicSharePayload();
+  const publicShare = state.publicShare || parseLegacyPublicSharePayload();
   const app = document.getElementById("app");
   app.innerHTML = `
     <main class="landing-screen" style="--landing-bg:url('${LANDING_BG}')">
       <section class="landing-card" aria-label="Mi Album Mundialista 2026">
         <img class="landing-logo" src="${BRAND_LOGO_FULL}" alt="Mi Album Mundialista 2026" />
         ${publicShare ? renderPublicLandingCard(publicShare) : ""}
+        ${!publicShare && state.publicShareError ? `<p class="landing-public-error">${escapeHtml(state.publicShareError)}</p>` : ""}
         <div class="landing-actions">
           <button class="button landing-primary" id="enterApp" type="button">
             ${renderIcon("log-in")}
@@ -3029,7 +3067,7 @@ function renderDuplicates() {
 }
 
 function renderListPage({ title, copy, type, stickers, empty }) {
-  const text = buildShareText(type, true);
+  const text = buildShareText(type, true, false);
   return `
     ${pageHeader(title, copy)}
     ${renderListFilters()}
@@ -3344,8 +3382,7 @@ function renderTradeCard(trade) {
 function renderShare() {
   const stats = getStats();
   const compare = compareFriendList();
-  const publicText = buildPublicSummaryText();
-  const publicUrl = buildPublicShareUrl();
+  const publicText = buildPublicSummaryText("Se genera un enlace corto al copiar o compartir.");
   return `
     ${pageHeader("Compartir", "Genera resumen publico, comparte progreso y compara listas con amigos.")}
     <section class="grid stats-grid">
@@ -3360,7 +3397,7 @@ function renderShare() {
         <p class="page-copy">Resumen de solo lectura para enviar por WhatsApp o pegar en un grupo.</p>
         <label class="share-link-box">
           <span>Enlace publico</span>
-          <input class="field" value="${escapeHtml(publicUrl)}" readonly />
+          <input class="field" value="Pulsa Copiar enlace o Compartir para generar un link corto" readonly />
         </label>
         <textarea class="textarea share-text" readonly>${escapeHtml(publicText)}</textarea>
         <div class="toolbar">
@@ -3642,11 +3679,17 @@ function bindEvents() {
   });
 
   document.querySelectorAll("[data-copy]").forEach((button) => {
-    button.addEventListener("click", () => copyText(buildShareText(button.dataset.copy, ["missing", "duplicates"].includes(state.view))));
+    button.addEventListener("click", async () => {
+      const publicUrl = await createPublicShareUrl();
+      await copyText(buildShareText(button.dataset.copy, ["missing", "duplicates"].includes(state.view), true, publicUrl));
+    });
   });
 
   document.querySelectorAll("[data-whatsapp]").forEach((button) => {
-    button.addEventListener("click", () => openWhatsApp(buildShareText(button.dataset.whatsapp, ["missing", "duplicates"].includes(state.view))));
+    button.addEventListener("click", async () => {
+      const publicUrl = await createPublicShareUrl();
+      openWhatsApp(buildShareText(button.dataset.whatsapp, ["missing", "duplicates"].includes(state.view), true, publicUrl));
+    });
   });
 
   const searchInput = document.getElementById("searchInput");
@@ -3888,15 +3931,21 @@ function bindEvents() {
   }
 
   document.querySelectorAll("[data-copy-public]").forEach((button) => {
-    button.addEventListener("click", () => copyText(buildPublicSummaryText()));
+    button.addEventListener("click", async () => {
+      const publicUrl = await createPublicShareUrl();
+      await copyText(buildPublicSummaryText(publicUrl));
+    });
   });
 
   document.querySelectorAll("[data-copy-public-link]").forEach((button) => {
-    button.addEventListener("click", () => copyText(buildPublicShareUrl()));
+    button.addEventListener("click", async () => copyText(await createPublicShareUrl()));
   });
 
   document.querySelectorAll("[data-whatsapp-public]").forEach((button) => {
-    button.addEventListener("click", () => openWhatsApp(buildPublicSummaryText()));
+    button.addEventListener("click", async () => {
+      const publicUrl = await createPublicShareUrl();
+      openWhatsApp(buildPublicSummaryText(publicUrl));
+    });
   });
 
   document.querySelectorAll("[data-native-share-public]").forEach((button) => {
@@ -4043,6 +4092,7 @@ function render() {
 async function initialize() {
   registerServiceWorker();
   state.data = await loadInitialData();
+  await loadPublicShareFromUrl();
   applyInitialRoute();
   render();
 }
